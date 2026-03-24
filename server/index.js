@@ -530,7 +530,8 @@ function handleShellConnection(ws) {
           
           // First check if gemini CLI is available
           try {
-            execSync(`which ${geminiPath}`, { stdio: 'ignore' });
+            const checkCmd = os.platform() === 'win32' ? `where.exe ${geminiPath}` : `which ${geminiPath}`;
+            execSync(checkCmd, { stdio: 'ignore' });
           } catch (error) {
             // console.error('❌ Gemini CLI not found in PATH or GEMINI_PATH');
             ws.send(JSON.stringify({
@@ -548,21 +549,25 @@ function handleShellConnection(ws) {
             geminiCommand = `${geminiPath} --resume ${sessionId} || ${geminiPath}`;
           }
           
-          // Create shell command that cds to the project directory first
-          const shellCommand = `cd "${projectPath}" && ${geminiCommand}`;
-          
-          
+          // Use appropriate shell for the platform
+          const isWindows = os.platform() === 'win32';
+          const shell = isWindows ? 'powershell.exe' : 'bash';
+          const shellArgs = isWindows ? ['-Command', shellCommand] : ['-c', shellCommand];
+
           // Start shell using PTY for proper terminal emulation
-          shellProcess = pty.spawn('bash', ['-c', shellCommand], {
+          shellProcess = pty.spawn(shell, shellArgs, {
             name: 'xterm-256color',
             cols: 80,
             rows: 24,
-            cwd: process.env.HOME || '/', // Start from home directory
+            cwd: projectPath, // Use project path
             env: { 
               ...process.env,
               TERM: 'xterm-256color',
-              COLORTERM: 'truecolor',
-              FORCE_COLOR: '3',
+              // On Windows, it's safer to not force xterm env vars if using powershell
+              ...(isWindows ? {} : { 
+                COLORTERM: 'truecolor',
+                FORCE_COLOR: '3'
+              }),
               // Override browser opening commands to echo URL for detection
               BROWSER: 'echo "OPEN_URL:"'
             }

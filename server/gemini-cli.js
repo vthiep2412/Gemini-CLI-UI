@@ -202,7 +202,8 @@ async function spawnGemini(command, options = {}, ws) {
     const geminiProcess = spawn(geminiPath, args, {
       cwd: workingDir,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env } // Inherit all environment variables
+      env: { ...process.env }, // Inherit all environment variables
+      shell: process.platform === 'win32' // Required for finding .cmd files on Windows
     });
     
     // Attach temp file info to process for cleanup later
@@ -255,49 +256,27 @@ async function spawnGemini(command, options = {}, ws) {
     geminiProcess.stdout.on('data', (data) => {
       const rawOutput = data.toString();
       outputBuffer += rawOutput;
-      // Debug - Raw Gemini stdout
+      
+      // Signal activity
       hasReceivedOutput = true;
       clearTimeout(timeout);
       
-      // Filter out debug messages and system messages
-      const lines = rawOutput.split('\n');
-      const filteredLines = lines.filter(line => {
-        // Skip debug messages and "Loaded cached credentials"
-        if (line.includes('[DEBUG]') || 
-            line.includes('Flushing log events') || 
-            line.includes('Clearcut response') ||
-            line.includes('[MemoryDiscovery]') ||
-            line.includes('[BfsFileSearch]') ||
-            line.includes('Loaded cached credentials')) {
-          return false;
-        }
-        return true;
-      });
+      // Accumulate the full response for session history
+      fullResponse += rawOutput;
       
-      const filteredOutput = filteredLines.join('\n').trim();
-      
-      if (filteredOutput) {
-        // Debug - Gemini response
-        
-        // Accumulate the full response
-        fullResponse += (fullResponse ? '\n' : '') + filteredOutput;
-        
-        // Use response handler for intelligent buffering
-        if (responseHandler) {
-          responseHandler.processData(filteredOutput);
-        } else {
-          // Fallback to direct sending
-          ws.send(JSON.stringify({
-            type: 'gemini-response',
-            data: {
-              type: 'message',
-              content: filteredOutput
-            }
-          }));
-        }
+      // Use response handler to stream back to UI
+      if (responseHandler) {
+        responseHandler.processData(rawOutput);
+      } else if (ws) {
+        ws.send(JSON.stringify({
+          type: 'gemini-response',
+          data: {
+            type: 'message',
+            content: rawOutput
+          }
+        }));
       }
-      
-      // For new sessions, create a session ID
+
       if (!sessionId && !sessionCreatedSent && !capturedSessionId) {
         capturedSessionId = `gemini_${Date.now()}`;
         sessionCreatedSent = true;
@@ -326,15 +305,17 @@ async function spawnGemini(command, options = {}, ws) {
     // Handle stderr
     geminiProcess.stderr.on('data', (data) => {
       const errorMsg = data.toString();
-      // Debug - Raw Gemini stderr
       
-      // Filter out deprecation warnings and "Loaded cached credentials" message
+      // Signal activity even on stderr to prevent timeout
+      if (errorMsg.trim()) {
+        hasReceivedOutput = true;
+        clearTimeout(timeout);
+      }
+      
+      // Filter out common CLI warnings
       if (errorMsg.includes('[DEP0040]') || 
           errorMsg.includes('DeprecationWarning') ||
-          errorMsg.includes('--trace-deprecation') ||
           errorMsg.includes('Loaded cached credentials')) {
-        // Log but don't send to client
-        // Debug - Gemini CLI warning (suppressed)
         return;
       }
       
