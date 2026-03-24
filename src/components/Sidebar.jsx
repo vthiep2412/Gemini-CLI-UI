@@ -421,7 +421,6 @@ function Sidebar({
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground">Gemini CLI UI</h1>
-              <p className="text-sm text-muted-foreground">AI coding assistant interface</p>
             </div>
           </div>
           <div className="flex gap-2">

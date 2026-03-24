@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, ChevronRight, Info, History, FileText, Mic, MicOff, Sparkles, Download, RotateCcw, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { MicButton } from './MicButton.jsx';
 import { authenticatedFetch } from '../utils/api';
+import Switch from './ui/Switch';
 
 function GitPanel({ selectedProject, isMobile }) {
   const [gitStatus, setGitStatus] = useState(null);
@@ -545,12 +546,10 @@ function GitPanel({ selectedProject, isMobile }) {
     return (
       <div key={filePath} className="border-b border-gray-200 dark:border-gray-700 last:border-0">
         <div className={`flex items-center hover:bg-gray-50 dark:hover:bg-gray-800 ${isMobile ? 'px-2 py-1.5' : 'px-3 py-2'}`}>
-          <input
-            type="checkbox"
+          <Switch
             checked={isSelected}
             onChange={() => toggleFileSelected(filePath)}
-            onClick={(e) => e.stopPropagation()}
-            className={`rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:checked:bg-blue-600 ${isMobile ? 'mr-1.5' : 'mr-2'}`}
+            className={`scale-75 ${isMobile ? 'mr-1' : 'mr-2'}`}
           />
           <div 
             className="flex items-center flex-1 cursor-pointer"

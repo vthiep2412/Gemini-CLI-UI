@@ -26,6 +26,7 @@ import GeminiStatus from './GeminiStatus';
 import { MicButton } from './MicButton.jsx';
 import { api } from '../utils/api';
 import { playNotificationSound } from '../utils/notificationSound';
+import { useMessages } from '../contexts/MessageContext';
 
 // Memoized message component to prevent unnecessary re-renders
 const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
@@ -1006,7 +1007,8 @@ const ImageAttachment = ({ file, onRemove, uploadProgress, error }) => {
 // - onReplaceTemporarySession: Called to replace temporary session ID with real WebSocket session ID
 //
 // This ensures uninterrupted chat experience by pausing sidebar refreshes during conversations.
-function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, messages, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom }) {
+function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom }) {
+  const { ws, sendMessage, messages } = useMessages();
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       return localStorage.getItem(`draft_input_${selectedProject.name}`) || '';

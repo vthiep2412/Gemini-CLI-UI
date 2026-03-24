@@ -11,10 +11,12 @@ import {
   Mic,
   Brain,
   Sparkles,
-  FileText
+  FileText,
+  Settings
 } from 'lucide-react';
 import DarkModeToggle from './DarkModeToggle';
 import { useTheme } from '../contexts/ThemeContext';
+import Switch from './ui/Switch';
 
 const QuickSettingsPanel = ({ 
   isOpen, 
@@ -45,49 +47,55 @@ const QuickSettingsPanel = ({
 
   return (
     <>
-      {/* Pull Tab */}
+      {/* Floating Settings Button - Bottom Right */}
       <div
-        className={`fixed ${isMobile ? 'bottom-44' : 'top-1/2 -translate-y-1/2'} ${
-          localIsOpen ? 'right-64' : 'right-0'
-        } z-50 transition-all duration-150 ease-out`}
+        className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ease-in-out ${
+          localIsOpen ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100'
+        }`}
       >
         <button
           onClick={handleToggle}
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-l-md p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shadow-lg"
-          aria-label={localIsOpen ? 'Close settings panel' : 'Open settings panel'}
+          className="flex items-center justify-center w-12 h-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-all shadow-xl hover:shadow-2xl active:scale-95 group"
+          aria-label="Open settings panel"
         >
-          {localIsOpen ? (
-            <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-          ) : (
-            <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-          )}
+          <Settings className="h-6 w-6 text-gray-600 dark:text-gray-400 group-hover:rotate-90 transition-transform duration-500" />
         </button>
       </div>
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-64 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-xl transform transition-transform duration-150 ease-out z-40 ${
+        className={`fixed top-0 right-0 h-full w-72 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-l border-gray-200/50 dark:border-gray-700/50 shadow-2xl transform transition-all duration-300 ease-in-out z-50 ${
           localIsOpen ? 'translate-x-0' : 'translate-x-full'
-        } ${isMobile ? 'h-screen' : ''}`}
+        } ${isMobile ? 'h-screen w-full sm:w-80' : ''}`}
       >
         <div className="h-full flex flex-col">
           {/* Header */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <Settings2 className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+          <div className="p-6 border-b border-gray-200/50 dark:border-gray-700/50 flex items-center justify-between">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Settings2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
               Quick Settings
             </h3>
+            <button
+              onClick={handleToggle}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            >
+              <ChevronRight className="h-6 w-6 text-gray-500" />
+            </button>
           </div>
 
           {/* Settings Content */}
-          <div className={`flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 bg-white dark:bg-gray-900 ${isMobile ? 'pb-20' : ''}`}>
+          <div className={`flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-8 ${isMobile ? 'pb-24' : ''}`}>
             {/* Appearance Settings */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Appearance</h4>
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-2">Appearance</h4>
               
-              <div className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-transparent hover:border-gray-300 dark:hover:border-gray-600">
-                <span className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                  {isDarkMode ? <Moon className="h-4 w-4 text-gray-600 dark:text-gray-400" /> : <Sun className="h-4 w-4 text-gray-600 dark:text-gray-400" />}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 hover:bg-gray-100/50 dark:hover:bg-gray-750/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group">
+                <span className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-white">
+                  <div className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400'}`}>
+                    {isDarkMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                  </div>
                   Dark Mode
                 </span>
                 <DarkModeToggle />
@@ -95,51 +103,52 @@ const QuickSettingsPanel = ({
             </div>
 
             {/* Tool Display Settings */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Tool Display</h4>
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-2">Tool Display</h4>
               
-              <label className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors border border-transparent hover:border-gray-300 dark:hover:border-gray-600">
-                <span className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                  <Maximize2 className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 hover:bg-gray-100/50 dark:hover:bg-gray-750/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group">
+                <span className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-white">
+                  <div className="p-1.5 bg-cyan-100 dark:bg-cyan-900/30 rounded-md text-cyan-600 dark:text-cyan-400">
+                    <Maximize2 className="h-4 w-4" />
+                  </div>
                   Auto-expand tools
                 </span>
-                <input
-                  type="checkbox"
+                <Switch
                   checked={autoExpandTools}
-                  onChange={(e) => onAutoExpandChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:checked:bg-blue-600"
+                  onChange={onAutoExpandChange}
                 />
-              </label>
+              </div>
 
-              <label className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors border border-transparent hover:border-gray-300 dark:hover:border-gray-600">
-                <span className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                  <Eye className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 hover:bg-gray-100/50 dark:hover:bg-gray-750/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group">
+                <span className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-white">
+                  <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-md text-emerald-600 dark:text-emerald-400">
+                    <Eye className="h-4 w-4" />
+                  </div>
                   Show raw parameters
                 </span>
-                <input
-                  type="checkbox"
+                <Switch
                   checked={showRawParameters}
-                  onChange={(e) => onShowRawParametersChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:checked:bg-blue-600"
+                  onChange={onShowRawParametersChange}
                 />
-              </label>
+              </div>
             </div>
+
             {/* View Options */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">View Options</h4>
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 mb-2">View Options</h4>
               
-              <label className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors border border-transparent hover:border-gray-300 dark:hover:border-gray-600">
-                <span className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
-                  <ArrowDown className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                  Auto-scroll to bottom
+              <div className="flex items-center justify-between p-4 rounded-xl bg-gray-50/50 dark:bg-gray-800/50 hover:bg-gray-100/50 dark:hover:bg-gray-750/50 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-700 group">
+                <span className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-white">
+                  <div className="p-1.5 bg-violet-100 dark:bg-violet-900/30 rounded-md text-violet-600 dark:text-violet-400">
+                    <ArrowDown className="h-4 w-4" />
+                  </div>
+                  Auto-scroll
                 </span>
-                <input
-                  type="checkbox"
+                <Switch
                   checked={autoScrollToBottom}
-                  onChange={(e) => onAutoScrollChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400 dark:bg-gray-800 dark:checked:bg-blue-600"
+                  onChange={onAutoScrollChange}
                 />
-              </label>
+              </div>
             </div>
 
             {/* Whisper Dictation Settings - HIDDEN */}

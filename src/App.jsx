@@ -26,6 +26,7 @@ import MobileNav from './components/MobileNav';
 import ToolsSettings from './components/ToolsSettings';
 import QuickSettingsPanel from './components/QuickSettingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import FloatingNav from './components/FloatingNav';
 
 import { useWebSocket } from './utils/websocket';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -33,6 +34,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useVersionCheck } from './hooks/useVersionCheck';
 import { api } from './utils/api';
+import { MessageProvider, useMessages } from './contexts/MessageContext';
 
 
 // Main App component with routing
@@ -71,7 +73,7 @@ function AppContent() {
   // until the conversation completes or is aborted.
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
   
-  const { ws, sendMessage, messages } = useWebSocket();
+  const { ws, sendMessage, messages } = useMessages();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -579,15 +581,17 @@ function AppContent() {
       )}
 
       {/* Main Content Area - Flexible */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        <FloatingNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          isMobile={isMobile}
+        />
         <MainContent
           selectedProject={selectedProject}
           selectedSession={selectedSession}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          ws={ws}
-          sendMessage={sendMessage}
-          messages={messages}
           isMobile={isMobile}
           onMenuClick={() => setSidebarOpen(true)}
           isLoading={isLoadingProjects}
@@ -611,29 +615,28 @@ function AppContent() {
           isInputFocused={isInputFocused}
         />
       )}
-      {/* Quick Settings Panel - Only show on chat tab */}
-      {activeTab === 'chat' && (
-        <QuickSettingsPanel
-          isOpen={showQuickSettings}
-          onToggle={setShowQuickSettings}
-          autoExpandTools={autoExpandTools}
-          onAutoExpandChange={(value) => {
-            setAutoExpandTools(value);
-            localStorage.setItem('autoExpandTools', JSON.stringify(value));
-          }}
-          showRawParameters={showRawParameters}
-          onShowRawParametersChange={(value) => {
-            setShowRawParameters(value);
-            localStorage.setItem('showRawParameters', JSON.stringify(value));
-          }}
-          autoScrollToBottom={autoScrollToBottom}
-          onAutoScrollChange={(value) => {
-            setAutoScrollToBottom(value);
-            localStorage.setItem('autoScrollToBottom', JSON.stringify(value));
-          }}
-          isMobile={isMobile}
-        />
-      )}
+      
+      {/* Quick Settings Panel - Always available via floating trigger */}
+      <QuickSettingsPanel
+        isOpen={showQuickSettings}
+        onToggle={setShowQuickSettings}
+        autoExpandTools={autoExpandTools}
+        onAutoExpandChange={(value) => {
+          setAutoExpandTools(value);
+          localStorage.setItem('autoExpandTools', JSON.stringify(value));
+        }}
+        showRawParameters={showRawParameters}
+        onShowRawParametersChange={(value) => {
+          setShowRawParameters(value);
+          localStorage.setItem('showRawParameters', JSON.stringify(value));
+        }}
+        autoScrollToBottom={autoScrollToBottom}
+        onAutoScrollChange={(value) => {
+          setAutoScrollToBottom(value);
+          localStorage.setItem('autoScrollToBottom', JSON.stringify(value));
+        }}
+        isMobile={isMobile}
+      />
 
       {/* Tools Settings Modal */}
       <ToolsSettings
@@ -654,12 +657,14 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <ProtectedRoute>
-            <Router>
-              <Routes>
-                <Route path="/" element={<AppContent />} />
-                <Route path="/session/:sessionId" element={<AppContent />} />
-              </Routes>
-            </Router>
+            <MessageProvider>
+              <Router>
+                <Routes>
+                  <Route path="/" element={<AppContent />} />
+                  <Route path="/session/:sessionId" element={<AppContent />} />
+                </Routes>
+              </Router>
+            </MessageProvider>
           </ProtectedRoute>
         </AuthProvider>
       </ThemeProvider>
