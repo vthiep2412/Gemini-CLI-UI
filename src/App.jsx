@@ -18,7 +18,7 @@
  * Handles both existing sessions (with real IDs) and new sessions (with temporary IDs).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import MainContent from './components/MainContent';
@@ -67,6 +67,11 @@ function AppContent() {
     const saved = localStorage.getItem('autoScrollToBottom');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? parseInt(saved, 10) : 312; 
+  });
+  const [isResizing, setIsResizing] = useState(false);
   // Session Protection System: Track sessions with active conversations to prevent
   // automatic project updates from interrupting ongoing chats. When a user sends
   // a message, the session is marked as "active" and project updates are paused
@@ -95,6 +100,43 @@ function AppContent() {
       clearTimeout(resizeTimeout);
     };
   }, []);
+
+  const startResizing = React.useCallback((e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = React.useCallback((e) => {
+    if (isResizing) {
+      // 75% of 312 = 234, 105% of 312 = 327.6 (using 328)
+      const newWidth = e.clientX;
+      if (newWidth >= 234 && newWidth <= 328) {
+        setSidebarWidth(newWidth);
+      }
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+    } else {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarWidth', sidebarWidth.toString());
+  }, [sidebarWidth]);
 
   useEffect(() => {
     // Fetch projects on component mount
@@ -141,93 +183,99 @@ function AppContent() {
   };
 
   // Handle WebSocket messages for real-time project updates
+  // We use a ref to track the last processed message ID to avoid redundant updates from streams
+  const lastProcessedMessageIdRef = useRef(null);
+  
   useEffect(() => {
     if (messages.length > 0) {
       const latestMessage = messages[messages.length - 1];
       
-      if (latestMessage.type === 'projects_updated') {
+      // Only process projects_updated messages AND only if it's a new unique message
+      if (latestMessage.type === 'projects_updated' && latestMessage.id !== lastProcessedMessageIdRef.current) {
+        lastProcessedMessageIdRef.current = latestMessage.id;
         
         // Session Protection Logic: Allow additions but prevent changes during active conversations
-        // This allows new sessions/projects to appear in sidebar while protecting active chat messages
-        // We check for two types of active sessions:
-        // 1. Existing sessions: selectedSession.id exists in activeSessions
-        // 2. New sessions: temporary "new-session-*" identifiers in activeSessions (before real session ID is received)
         const hasActiveSession = (selectedSession && activeSessions.has(selectedSession.id)) ||
                                  (activeSessions.size > 0 && Array.from(activeSessions).some(id => id.startsWith('new-session-')));
         
         if (hasActiveSession) {
-          // Allow updates but be selective: permit additions, prevent changes to existing items
           const updatedProjects = latestMessage.projects;
           const currentProjects = projects;
-          
-          // Check if this is purely additive (new sessions/projects) vs modification of existing ones
           const isAdditiveUpdate = isUpdateAdditive(currentProjects, updatedProjects, selectedProject, selectedSession);
           
-          if (!isAdditiveUpdate) {
-            // Skip updates that would modify existing selected session/project
-            return;
-          }
-          // Continue with additive updates below
+          if (!isAdditiveUpdate) return;
         }
         
-        // Update projects state with the new data from WebSocket
         const updatedProjects = latestMessage.projects;
-        setProjects(updatedProjects);
         
-        // Update selected project if it exists in the updated projects
+        // Preserve project array reference if content is identical
+        setProjects(prevProjects => {
+          const hasChanges = updatedProjects.some((newProject, index) => {
+            const prevProject = prevProjects[index];
+            if (!prevProject) return true;
+            return (
+              newProject.name !== prevProject.name ||
+              newProject.displayName !== prevProject.displayName ||
+              JSON.stringify(newProject.sessionMeta) !== JSON.stringify(prevProject.sessionMeta) ||
+              JSON.stringify(newProject.sessions) !== JSON.stringify(prevProject.sessions)
+            );
+          }) || updatedProjects.length !== prevProjects.length;
+          
+          return hasChanges ? updatedProjects : prevProjects;
+        });
+        
+        // Use tactical updates for selected items to prevent reference cycling
         if (selectedProject) {
           const updatedSelectedProject = updatedProjects.find(p => p.name === selectedProject.name);
           if (updatedSelectedProject) {
-            setSelectedProject(updatedSelectedProject);
+            setSelectedProject(prev => 
+              prev && prev.name === updatedSelectedProject.name && JSON.stringify(prev) === JSON.stringify(updatedSelectedProject)
+                ? prev : updatedSelectedProject
+            );
             
-            // Update selected session only if it was deleted - avoid unnecessary reloads
             if (selectedSession) {
               const updatedSelectedSession = updatedSelectedProject.sessions?.find(s => s.id === selectedSession.id);
               if (!updatedSelectedSession) {
-                // Session was deleted
                 setSelectedSession(null);
+              } else {
+                setSelectedSession(prev => 
+                  prev && prev.id === updatedSelectedSession.id && JSON.stringify(prev) === JSON.stringify(updatedSelectedSession)
+                    ? prev : updatedSelectedSession
+                );
               }
-              // Don't update if session still exists with same ID - prevents reload
             }
           }
         }
       }
     }
-  }, [messages, selectedProject, selectedSession, activeSessions]);
+  }, [messages, selectedProject?.name, selectedSession?.id, activeSessions]);
 
   const fetchProjects = async () => {
     try {
-      setIsLoadingProjects(true);
+      // Only show full-screen loader if we have no projects yet
+      if (projects.length === 0) {
+        setIsLoadingProjects(true);
+      }
       const response = await api.projects();
       const data = await response.json();
       
       // Optimize to preserve object references when data hasn't changed
       setProjects(prevProjects => {
-        // If no previous projects, just set the new data
-        if (prevProjects.length === 0) {
-          return data;
-        }
+        if (prevProjects.length === 0) return data;
         
-        // Check if the projects data has actually changed
         const hasChanges = data.some((newProject, index) => {
           const prevProject = prevProjects[index];
           if (!prevProject) return true;
-          
-          // Compare key properties that would affect UI
           return (
             newProject.name !== prevProject.name ||
             newProject.displayName !== prevProject.displayName ||
-            newProject.fullPath !== prevProject.fullPath ||
             JSON.stringify(newProject.sessionMeta) !== JSON.stringify(prevProject.sessionMeta) ||
             JSON.stringify(newProject.sessions) !== JSON.stringify(prevProject.sessions)
           );
         }) || data.length !== prevProjects.length;
         
-        // Only update if there are actual changes
         return hasChanges ? data : prevProjects;
       });
-      
-      // Don't auto-select any project - user should choose manually
     } catch (error) {
       console.error('Error fetching projects:', error);
     } finally {
@@ -241,25 +289,22 @@ function AppContent() {
   // Handle URL-based session loading
   useEffect(() => {
     if (sessionId && projects.length > 0) {
-      // Only switch tabs on initial load, not on every project update
-      const shouldSwitchTab = !selectedSession || selectedSession.id !== sessionId;
       // Find the session across all projects
       for (const project of projects) {
         const session = project.sessions?.find(s => s.id === sessionId);
         if (session) {
-          setSelectedProject(project);
-          setSelectedSession(session);
-          // Only switch to chat tab if we're loading a different session
-          if (shouldSwitchTab) {
-            setActiveTab('chat');
+          // Only update references if they are actually different objects or null
+          setSelectedProject(prev => prev?.name === project.name ? prev : project);
+          setSelectedSession(prev => prev?.id === session.id ? prev : session);
+          
+          // Only switch to chat tab if we're not already on a session-supporting tab
+          // This prevents forcing the user back to "chat" if they are in "shell" or "files"
+          if (activeTab === 'chat' || !['files', 'shell', 'git', 'preview'].includes(activeTab)) {
+            if (activeTab !== 'chat') setActiveTab('chat');
           }
           return;
         }
       }
-      
-      // If session not found, it might be a newly created session
-      // Just navigate to it and it will be found when the sidebar refreshes
-      // Don't redirect to home, let the session load naturally
     }
   }, [sessionId, projects, navigate]);
 
@@ -512,7 +557,10 @@ function AppContent() {
     <div className="fixed inset-0 flex bg-background">
       {/* Fixed Desktop Sidebar */}
       {!isMobile && (
-        <div className="w-80 flex-shrink-0 border-r border-border bg-card">
+        <div 
+          className="flex-shrink-0 border-r border-border bg-card relative"
+          style={{ width: `${sidebarWidth}px` }}
+        >
           <div className="h-full overflow-hidden">
             <Sidebar
               projects={projects}
@@ -532,6 +580,13 @@ function AppContent() {
               onShowVersionModal={() => setShowVersionModal(true)}
             />
           </div>
+          <div 
+            onMouseDown={startResizing}
+            className={`absolute top-0 right-[-3px] bottom-0 w-1.5 cursor-ew-resize transition-colors z-50 ${
+              isResizing ? 'bg-primary' : 'hover:bg-primary/20'
+            } group-hover:block transition-all duration-300`}
+            title="Drag to resize sidebar"
+          />
         </div>
       )}
 
@@ -581,12 +636,69 @@ function AppContent() {
       )}
 
       {/* Main Content Area - Flexible */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        <FloatingNav
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isMobile={isMobile}
-        />
+      <div className="flex-1 flex flex-col min-w-0 relative h-full">
+        {/* Persistent Top Bar (Header) */}
+        <header className="h-16 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-border flex-shrink-0 z-30">
+          <div className="h-full max-w-7xl mx-auto px-3 sm:px-4 grid grid-cols-3 items-center w-full">
+            {/* Left side: Project Info */}
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+              {isMobile && (
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              )}
+              
+              <div className="min-w-0">
+                {!selectedProject ? (
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
+                      Gemini CLI
+                    </h2>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Select a project to begin
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
+                      {activeTab === 'chat' && selectedSession ? selectedSession.summary : 
+                       activeTab === 'files' ? 'Project Files' : 
+                       activeTab === 'git' ? 'Source Control' : 
+                       activeTab === 'shell' ? 'Terminal' : selectedProject.displayName}
+                    </h2>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
+                      {selectedProject.displayName}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Middle: Floating Nav (Centering Container) */}
+            <div className="flex justify-center">
+              <FloatingNav
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                isMobile={false}
+                selectedProject={selectedProject}
+              />
+            </div>
+
+            {/* Right side: Actions/Status (Placeholder for future use) */}
+            <div className="flex justify-end items-center space-x-2">
+              <div className="hidden sm:block">
+                {/* Status indicator or other actions could go here */}
+              </div>
+            </div>
+          </div>
+        </header>
+
         <MainContent
           selectedProject={selectedProject}
           selectedSession={selectedSession}
@@ -613,6 +725,7 @@ function AppContent() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isInputFocused={isInputFocused}
+          selectedProject={selectedProject}
         />
       )}
       

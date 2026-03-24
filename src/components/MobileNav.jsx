@@ -1,31 +1,19 @@
-import React from 'react';
-import { MessageSquare, Folder, Terminal, GitBranch, Globe } from 'lucide-react';
+import { MessageSquare, Folder, Terminal, GitBranch, Bookmark, Globe } from 'lucide-react';
 
-function MobileNav({ activeTab, setActiveTab, isInputFocused }) {
+function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject }) {
   // Detect dark mode
   const isDarkMode = document.documentElement.classList.contains('dark');
-  const navItems = [
-    {
-      id: 'chat',
-      icon: MessageSquare,
-      onClick: () => setActiveTab('chat')
-    },
-    {
-      id: 'shell',
-      icon: Terminal,
-      onClick: () => setActiveTab('shell')
-    },
-    {
-      id: 'files',
-      icon: Folder,
-      onClick: () => setActiveTab('files')
-    },
-    {
-      id: 'git',
-      icon: GitBranch,
-      onClick: () => setActiveTab('git')
-    }
-  ];
+  const navItems = selectedProject 
+    ? [
+        { id: 'chat', icon: MessageSquare, onClick: () => setActiveTab('chat') },
+        { id: 'shell', icon: Terminal, onClick: () => setActiveTab('shell') },
+        { id: 'files', icon: Folder, onClick: () => setActiveTab('files') },
+        { id: 'git', icon: GitBranch, onClick: () => setActiveTab('git') }
+      ]
+    : [
+        { id: 'chat', icon: MessageSquare, onClick: () => setActiveTab('chat') },
+        { id: 'bookmark', icon: Bookmark, onClick: () => setActiveTab('bookmark') }
+      ];
 
   return (
     <>

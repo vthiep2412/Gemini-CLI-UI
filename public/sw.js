@@ -19,6 +19,19 @@ self.addEventListener('install', event => {
 
 // Fetch event
 self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  
+  // Skip Vite-specific and dev-only paths to prevent HMR and module load issues
+  if (
+    url.pathname.startsWith('/@vite') ||
+    url.pathname.startsWith('/@react-refresh') ||
+    url.pathname.startsWith('/src/') ||
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1'
+  ) {
+    return; // Let the browser handle these normally
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {

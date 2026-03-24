@@ -1281,22 +1281,20 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
   }, [isNearBottom]);
 
   // Track previous session ID using useRef to properly detect session changes
-  const previousSessionIdRef = useRef(null);
+  const lastLoadedSessionIdRef = useRef(null);
   
   useEffect(() => {
     // Load session messages when session changes
     const loadMessages = async () => {
       if (selectedSession && selectedProject) {
-        // Check if this is actually a different session
-        const isNewSession = previousSessionIdRef.current !== selectedSession.id;
+        // Check if this is actually a different session ID
+        const isNewSession = lastLoadedSessionIdRef.current !== selectedSession.id;
         
         if (isNewSession) {
-          // console.log('Loading messages for session:', selectedSession.id, 'previous:', previousSessionIdRef.current);
-          previousSessionIdRef.current = selectedSession.id;
+          lastLoadedSessionIdRef.current = selectedSession.id;
           setCurrentSessionId(selectedSession.id);
           
           // Only load messages from API if this is a user-initiated session change
-          // For system-initiated changes, preserve existing messages and rely on WebSocket
           if (!isSystemSessionChange) {
             // Clear existing messages immediately to show loading state
             setChatMessages([]);
@@ -1306,13 +1304,11 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
             try {
               const messages = await loadSessionMessages(selectedProject.name, selectedSession.id);
               setSessionMessages(messages);
-              // convertedMessages will be automatically updated via useMemo
-              // Scroll to bottom after loading session messages if auto-scroll is enabled
               if (autoScrollToBottom) {
                 setTimeout(() => scrollToBottom(), 200);
               }
             } catch (error) {
-              // console.error('Failed to load session messages:', error);
+              // Failed to load
             } finally {
               setIsLoadingSessionMessages(false);
             }
@@ -1325,12 +1321,12 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
         setChatMessages([]);
         setSessionMessages([]);
         setCurrentSessionId(null);
-        previousSessionIdRef.current = null;
+        lastLoadedSessionIdRef.current = null;
       }
     };
     
     loadMessages();
-  }, [selectedSession, selectedProject, loadSessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
+  }, [selectedSession?.id, selectedProject?.name, loadSessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {

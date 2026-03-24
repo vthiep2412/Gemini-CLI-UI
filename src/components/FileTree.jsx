@@ -31,7 +31,7 @@ function FileTree({ selectedProject }) {
       // Custom event triggered when files are created/modified
       if (event.detail?.projectName === selectedProject.name) {
         console.log('File operation detected, refreshing file tree...');
-        fetchFiles();
+        fetchFiles(true);
       }
     };
 
@@ -44,7 +44,7 @@ function FileTree({ selectedProject }) {
         const timeSinceRefresh = Date.now() - lastRefresh;
         // Only refresh if more than 2 seconds have passed
         if (timeSinceRefresh > 2000) {
-          fetchFiles();
+          fetchFiles(true);
         }
       }
     };
@@ -55,7 +55,7 @@ function FileTree({ selectedProject }) {
     const intervalId = setInterval(() => {
       const filesPanel = document.querySelector('[data-panel="files"]');
       if (filesPanel && !filesPanel.classList.contains('hidden')) {
-        fetchFiles();
+        fetchFiles(true);
       }
     }, 5000);
 
@@ -74,8 +74,10 @@ function FileTree({ selectedProject }) {
     }
   }, []);
 
-  const fetchFiles = async () => {
-    setLoading(true);
+  const fetchFiles = async (isSilent = false) => {
+    if (!isSilent || files.length === 0) {
+      setLoading(true);
+    }
     try {
       const response = await api.getFiles(selectedProject.name);
       
@@ -102,7 +104,7 @@ function FileTree({ selectedProject }) {
     if (selectedProject) {
       window.refreshFileTree = () => {
         console.log('Manual file tree refresh triggered');
-        fetchFiles();
+        fetchFiles(true);
       };
     }
     return () => {
@@ -413,7 +415,7 @@ function FileTree({ selectedProject }) {
         </div>
       )}
       
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 p-2">
         {files.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3">

@@ -94,6 +94,7 @@
     --input: 220 13% 91%;
     --ring: 221 83% 53%;
     --radius: 0.75rem;
+    --header-height: 4rem;
   }
 
   .dark {
@@ -116,6 +117,7 @@
     --border: 216 34% 17%;
     --input: 216 34% 17%;
     --ring: 224 76% 48%;
+    --header-height: 4rem;
   }
 
   body {
@@ -155,24 +157,58 @@
     animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Custom scrollbar styles */
+}
+
+/* Standardized Global Scrollbars - Ultra Floating Style */
+::-webkit-scrollbar {
+  width: 40px;
+  height: 40px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 20px;
+  /* Double width: 40px, Double border: 14px for massive float */
+  border: 14px solid transparent; 
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.6);
+}
+
+*::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Firefox support (limited "float" capability) */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
+}
+
+@layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: hsl(var(--muted-foreground)) transparent;
   }
   
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+    width: 20px;
+    height: 20px;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground));
-    border-radius: 3px;
+    border: 7px solid transparent;
+  }
+
+  .no-transition, .no-transition * {
+    transition: none !important;
   }
 }
 
@@ -192,16 +228,29 @@
   @apply bg-white/10 dark:bg-black/10 backdrop-blur-md border border-white/10 dark:border-white/5;
 }
 
-/* Smooth transitions */
-* {
-  transition: background-color 200ms ease-in-out, 
-              border-color 200ms ease-in-out,
-              color 200ms ease-in-out,
-              transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 150ms ease-in-out;
+/* Optimized Theme Transitions: Only animate the major surface containers */
+body, 
+.bg-background, 
+.bg-card, 
+.bg-popover, 
+.bg-secondary, 
+.bg-muted, 
+.bg-accent,
+.text-foreground,
+.text-muted-foreground,
+.border-border,
+.border-input,
+.chat-bubble {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), 
+              color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Exception for code and terminal */
-pre, code, .xterm-container, .cm-editor {
+/* Exception for code, terminal, and icons to prevent massive layout/paint lag */
+pre, code, svg, .xterm-container, .cm-editor {
   transition: none !important;
+}
+
+#idk{
+  height: 10rem;
 }

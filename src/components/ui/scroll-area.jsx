@@ -8,13 +8,13 @@ const ScrollArea = React.forwardRef(({ className, children, ...props }, ref) => 
     {...props}
   >
     <div 
-      className="h-full w-full rounded-[inherit] overflow-auto"
+      className="h-full w-full rounded-[inherit] overflow-x-auto overflow-y-visible mb-8"
       style={{
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y'
-      }}
-    >
+      }} >
       {children}
+      <div id="idk"></div>
     </div>
   </div>
 ))

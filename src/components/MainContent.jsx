@@ -131,58 +131,6 @@ function MainContent({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header - Minimal version for title only */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3 sm:p-4 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            {isMobile && (
-              <button
-                onClick={onMenuClick}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  onMenuClick();
-                }}
-                className="p-2.5 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 touch-manipulation active:scale-95"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            )}
-            <div className="min-w-0">
-              {activeTab === 'chat' && selectedSession ? (
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
-                    {selectedSession.summary}
-                  </h2>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate flex items-center gap-1.5">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
-                    {selectedProject.displayName} <span className="hidden sm:inline opacity-50">• {selectedSession.id}</span>
-                  </div>
-                </div>
-              ) : activeTab === 'chat' && !selectedSession ? (
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                    New Session
-                  </h2>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {selectedProject.displayName}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-                    {activeTab === 'files' ? 'Project Files' : activeTab === 'git' ? 'Source Control' : activeTab === 'shell' ? 'Terminal' : 'Project'}
-                  </h2>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    {selectedProject.displayName}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -218,6 +166,12 @@ function MainContent({
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`}>
           {/* <LivePreviewPanel /> */}
+        </div>
+        <div className={`h-full flex items-center justify-center ${activeTab === 'bookmark' ? 'block' : 'hidden'}`}>
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <h2 className="text-xl font-semibold mb-2">Bookmarks</h2>
+            <p>Your bookmarked sessions and files will appear here.</p>
+          </div>
         </div>
       </div>
 

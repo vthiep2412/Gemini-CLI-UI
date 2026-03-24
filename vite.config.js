@@ -10,6 +10,12 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react()],
     server: {
       port: parseInt(env.VITE_PORT) || 4009,
+      watch: {
+        ignored: ['**/node_modules/**', '**/dist/**']
+      },
+      hmr: {
+        overlay: false
+      },
       proxy: {
         '/api': `http://localhost:${env.PORT || 4008}`,
         '/ws': {
@@ -17,6 +23,18 @@ export default defineConfig(({ command, mode }) => {
           ws: true
         }
       }
+    },
+    optimizeDeps: {
+      include: [
+        'lucide-react',
+        'framer-motion',
+        'react-router-dom',
+        '@uiw/react-codemirror',
+        'react-markdown',
+        'remark-gfm',
+        'react-syntax-highlighter',
+        'react-syntax-highlighter/dist/esm/styles/prism'
+      ]
     },
     build: {
       outDir: 'dist'

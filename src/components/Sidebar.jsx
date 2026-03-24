@@ -4,10 +4,11 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 
-import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronDown, ChevronRight, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
+import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronRight, ChevronDown, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import GeminiLogo from './GeminiLogo';
 import { api } from '../utils/api';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -52,7 +53,7 @@ function Sidebar({
   currentVersion,
   onShowVersionModal
 }) {
-  const [expandedProjects, setExpandedProjects] = useState(new Set());
+  const [expandedProjectName, setExpandedProjectName] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingName, setEditingName] = useState('');
@@ -112,7 +113,7 @@ function Sidebar({
   // Auto-expand project folder when a session is selected
   useEffect(() => {
     if (selectedSession && selectedProject) {
-      setExpandedProjects(prev => new Set([...prev, selectedProject.name]));
+      setExpandedProjectName(selectedProject.name);
     }
   }, [selectedSession, selectedProject]);
 
@@ -169,13 +170,7 @@ function Sidebar({
   }, []);
 
   const toggleProject = (projectName) => {
-    const newExpanded = new Set(expandedProjects);
-    if (newExpanded.has(projectName)) {
-      newExpanded.delete(projectName);
-    } else {
-      newExpanded.add(projectName);
-    }
-    setExpandedProjects(newExpanded);
+    setExpandedProjectName(prev => prev === projectName ? null : projectName);
   };
 
   // Starred projects utility functions
@@ -412,9 +407,9 @@ function Sidebar({
   return (
     <div className="h-full flex flex-col bg-card md:select-none">
       {/* Header */}
-      <div className="md:p-4 md:border-b md:border-border">
+      <div className="md:h-16 md:flex md:items-center md:px-4 md:border-b md:border-border">
         {/* Desktop Header */}
-        <div className="hidden md:flex items-center justify-between">
+        <div className="hidden md:flex items-center justify-between w-full">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
               <MessageSquare className="w-4 h-4 text-primary-foreground" />
@@ -631,8 +626,8 @@ function Sidebar({
       )}
       
       {/* Projects List */}
-      <ScrollArea className="flex-1 md:px-2 md:py-3 overflow-y-auto overscroll-contain">
-        <div className="md:space-y-1 pb-safe-area-inset-bottom">
+      <ScrollArea className="flex-1 md:pl-2 md:pr-4 md:py-3 overscroll-contain">
+        <div className="md:space-y-3 pb-safe-area-inset-bottom">
           {isLoading ? (
             <div className="text-center py-12 md:py-8 px-4">
               <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4 md:mb-3">
@@ -665,7 +660,7 @@ function Sidebar({
             </div>
           ) : (
             filteredProjects.map((project) => {
-              const isExpanded = expandedProjects.has(project.name);
+              const isExpanded = expandedProjectName === project.name;
               const isSelected = selectedProject?.name === project.name;
               const isStarred = isProjectStarred(project.name);
               
@@ -805,12 +800,13 @@ function Sidebar({
                                 >
                                   <Edit3 className="w-4 h-4 text-primary" />
                                 </button>
-                                <div className="w-6 h-6 rounded-md bg-muted/30 flex items-center justify-center">
-                                  {isExpanded ? (
-                                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                                  ) : (
+                                <div className="w-6 h-6 rounded-md bg-muted/30 flex items-center justify-center overflow-hidden">
+                                  <motion.div
+                                    animate={{ rotate: isExpanded ? 90 : 0 }}
+                                    transition={{ duration: 0.2 }}
+                                  >
                                     <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                                  )}
+                                  </motion.div>
                                 </div>
                               </>
                             )}
@@ -955,11 +951,12 @@ function Sidebar({
                                 <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
                               </div>
                             )}
-                            {isExpanded ? (
-                              <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                            ) : (
+                            <motion.div
+                              animate={{ rotate: isExpanded ? 90 : 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
                               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                            )}
+                            </motion.div>
                           </>
                         )}
                       </div>
@@ -967,8 +964,16 @@ function Sidebar({
                   </div>
 
                   {/* Sessions List */}
-                  {isExpanded && (
-                    <div className="ml-3 space-y-1 border-l border-border pl-3">
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <div className="ml-3 space-y-1 border-l border-border pl-3 pb-2">
                       {!initialSessionsLoaded.has(project.name) ? (
                         // Loading skeleton for sessions
                         Array.from({ length: 3 }).map((_, i) => (
@@ -1230,11 +1235,13 @@ function Sidebar({
                         New Session
                       </Button>
                     </div>
-                  )}
-                </div>
-              );
-            })
-          )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })
+      )}
         </div>
       </ScrollArea>
       

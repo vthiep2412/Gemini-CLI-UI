@@ -1,9 +1,26 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
+import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
+import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
+import html from 'react-syntax-highlighter/dist/esm/languages/prism/markup';
+import css from 'react-syntax-highlighter/dist/esm/languages/prism/css';
+import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
+import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+// Register languages
+SyntaxHighlighter.registerLanguage('javascript', js);
+SyntaxHighlighter.registerLanguage('python', python);
+SyntaxHighlighter.registerLanguage('html', html);
+SyntaxHighlighter.registerLanguage('css', css);
+SyntaxHighlighter.registerLanguage('bash', bash);
+SyntaxHighlighter.registerLanguage('json', json);
+SyntaxHighlighter.registerLanguage('markup', html);
+SyntaxHighlighter.registerLanguage('sh', bash);
+SyntaxHighlighter.registerLanguage('js', js);
 
 const CodeBlock = ({ language, value, isDarkMode }) => {
   const [copied, setCopied] = useState(false);
@@ -198,9 +215,9 @@ export const EnhancedMessageRenderer = ({ content, isDarkMode = true }) => {
             if (!text || text === '') return null;
             
             return (
-              <p className="mb-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <div className="mb-2 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                 {children}
-              </p>
+              </div>
             );
           },
           ul: ({ children }) => (
