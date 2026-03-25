@@ -1,0 +1,4 @@
+## 2025-03-25 - React Component Re-renders
+
+**Learning:** Unnecessary and expensive re-calculations of sorted and filtered arrays inside a functional component body cause severe performance penalties, especially when the component handles large sets of data or interacts directly with rapidly changing inputs (like a search filter).
+**Action:** Identify expensive array operations (like `.sort` and `.filter`) that execute on every render. Use `useMemo` to memoize the result of these operations, ensuring they are only re-calculated when their dependencies change. Similarly, wrap any helper functions passed to `useMemo` or child components in `useCallback` to maintain referential stability. When dealing with conditionally derived values inside `useMemo`, like falling back to an empty array (`[]`), declare the default/fallback value within the `useMemo` block or ensure it has a stable reference to avoid breaking the memoization cache.
