@@ -47,12 +47,45 @@ import { validateApiKey, authenticateToken, authenticateWebSocket } from './midd
 
 // File system watcher for projects folder
 let projectsWatcher = null;
+// Cross-platform home dir (Bun-friendly) with safe fallbacks
+const getHomeDir = () => {
+  // Cross-platform, Bun-friendly home directory resolution
+  if (typeof os !== 'undefined' && typeof os.homedir === 'function') {
+    const d = os.homedir();
+    if (typeof d === 'string' && d) return d;
+  }
+  return process.env.HOME || process.env.USERPROFILE || '';
+};
+
+// Compute Gemini projects path safely (watch path)
+// Honor an explicit override from .env via GEMINI_PROJECTS_PATH if defined
+const geminiProjectsPath = (() => {
+  const envOverride = process.env.GEMINI_PROJECTS_PATH;
+  if (typeof envOverride === 'string' && envOverride.trim()) {
+    return envOverride.trim();
+  }
+  const home = getHomeDir();
+  return home ? path.join(home, '.gemini', 'projects') : path.join(process.cwd(), '.gemini', 'projects');
+})();
 const connectedClients = new Set();
 
 // Setup file system watcher for Gemini projects folder using chokidar
 async function setupProjectsWatcher() {
   const chokidar = (await import('chokidar')).default;
-  const geminiProjectsPath = path.join(process.env.HOME, '.gemini', 'projects');
+  // Use the module-scoped geminiProjectsPath (which honors GEMINI_PROJECTS_PATH override)
+  const watchPath = geminiProjectsPath;
+  
+  // If the watcher path doesn't exist, log a warning and skip startup gracefully
+  let pathExists = true;
+  try {
+    await fsPromises.access(watchPath);
+  } catch {
+    pathExists = false;
+  }
+  if (!pathExists) {
+    console.warn(`[GeminiWatcher] Watch path not found: ${watchPath}. Gemini CLI may not be installed or hasn't been run yet. Skipping watcher startup.`);
+    return;
+  }
   
   if (projectsWatcher) {
     projectsWatcher.close();
@@ -60,7 +93,7 @@ async function setupProjectsWatcher() {
   
   try {
     // Initialize chokidar watcher with optimized settings
-    projectsWatcher = chokidar.watch(geminiProjectsPath, {
+    projectsWatcher = chokidar.watch(watchPath, {
       ignored: [
         '**/node_modules/**',
         '**/.git/**',
@@ -99,7 +132,7 @@ async function setupProjectsWatcher() {
             projects: updatedProjects,
             timestamp: new Date().toISOString(),
             changeType: eventType,
-            changedFile: path.relative(geminiProjectsPath, filePath)
+            changedFile: path.relative(watchPath, filePath)
           });
           
           connectedClients.forEach(client => {

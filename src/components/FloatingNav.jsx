@@ -2,21 +2,19 @@ import React from 'react';
 import { MessageSquare, Terminal, FolderTree, GitBranch, Bookmark } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const FloatingNav = ({ activeTab, setActiveTab, selectedProject }) => {
-  const tabs = selectedProject 
-    ? [
-        { id: 'chat', label: 'Chat', icon: MessageSquare },
-        { id: 'shell', label: 'Shell', icon: Terminal },
-        { id: 'files', label: 'Files', icon: FolderTree },
-        { id: 'git', label: 'Git', icon: GitBranch },
-      ]
-    : [
-        { id: 'chat', label: 'Chat', icon: MessageSquare },
-        { id: 'bookmark', label: 'Bookmark', icon: Bookmark },
-      ];
+const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject }) => {
+  const tabs = [
+    { id: 'chat', label: 'Chat', icon: MessageSquare },
+    { id: 'bookmark', label: 'Bookmark', icon: Bookmark },
+    ...(selectedProject ? [
+      { id: 'shell', label: 'Shell', icon: Terminal },
+      { id: 'files', label: 'Files', icon: FolderTree },
+      { id: 'git', label: 'Git', icon: GitBranch },
+    ] : []),
+  ];
 
   return (
-    <nav className="flex items-center gap-1 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/20 dark:border-gray-700/50 p-1 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)] no-transition">
+    <nav className="flex items-center gap-1 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border border-white/20 dark:border-gray-700/50 p-1 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
       <AnimatePresence mode="popLayout">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -25,13 +23,12 @@ const FloatingNav = ({ activeTab, setActiveTab, selectedProject }) => {
           return (
             <motion.button
               key={tab.id}
-              layout
               initial={{ opacity: 0, scale: 0.5, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.5, y: -15 }}
               whileHover={{ 
                 scale: 1.02,
-                backgroundColor: "rgba(59, 130, 246, 0.05)",
+                backgroundColor: "rgba(59, 130, 246, 0.12)",
                 filter: "drop-shadow(0 0 2px rgba(59, 130, 246, 0.15))",
                 transition: { duration: 0.2 }
               }}
@@ -47,7 +44,7 @@ const FloatingNav = ({ activeTab, setActiveTab, selectedProject }) => {
               }}
               onClick={() => setActiveTab(tab.id)}
               className={`
-                relative flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-colors duration-200
+                relative flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-medium transition-all duration-300 ease-in-out
                 ${isActive 
                   ? 'text-white' 
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}
@@ -75,6 +72,6 @@ const FloatingNav = ({ activeTab, setActiveTab, selectedProject }) => {
       </AnimatePresence>
     </nav>
   );
-};
+});
 
 export default FloatingNav;

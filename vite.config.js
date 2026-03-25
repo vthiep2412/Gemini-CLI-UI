@@ -31,9 +31,7 @@ export default defineConfig(({ command, mode }) => {
         'react-router-dom',
         '@uiw/react-codemirror',
         'react-markdown',
-        'remark-gfm',
-        'react-syntax-highlighter',
-        'react-syntax-highlighter/dist/esm/styles/prism'
+        'remark-gfm'
       ]
     },
     build: {

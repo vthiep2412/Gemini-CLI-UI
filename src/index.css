@@ -207,9 +207,6 @@
     border: 7px solid transparent;
   }
 
-  .no-transition, .no-transition * {
-    transition: none !important;
-  }
 }
 
 /* Gemini-specific styles */
@@ -246,9 +243,14 @@ body,
               color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Exception for code, terminal, and icons to prevent massive layout/paint lag */
-pre, code, svg, .xterm-container, .cm-editor {
+/* Exception for code and terminal to prevent massive layout/paint lag */
+pre, code, .xterm-container, .cm-editor {
   transition: none !important;
+}
+
+/* Allow transitions for navigation icons */
+nav svg, .nav-icon {
+  transition: color 300ms ease-in-out, transform 300ms ease-in-out !important;
 }
 
 #idk{

@@ -78,7 +78,7 @@ function AppContent() {
   // until the conversation completes or is aborted.
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
   
-  const { ws, sendMessage, messages } = useMessages();
+  const { ws, sendMessage, messages, lastSystemMessage } = useMessages();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -187,12 +187,9 @@ function AppContent() {
   const lastProcessedMessageIdRef = useRef(null);
   
   useEffect(() => {
-    if (messages.length > 0) {
-      const latestMessage = messages[messages.length - 1];
-      
-      // Only process projects_updated messages AND only if it's a new unique message
-      if (latestMessage.type === 'projects_updated' && latestMessage.id !== lastProcessedMessageIdRef.current) {
-        lastProcessedMessageIdRef.current = latestMessage.id;
+    if (lastSystemMessage && lastSystemMessage.id !== lastProcessedMessageIdRef.current) {
+      lastProcessedMessageIdRef.current = lastSystemMessage.id;
+      const latestMessage = lastSystemMessage;
         
         // Session Protection Logic: Allow additions but prevent changes during active conversations
         const hasActiveSession = (selectedSession && activeSessions.has(selectedSession.id)) ||
@@ -246,9 +243,8 @@ function AppContent() {
             }
           }
         }
-      }
     }
-  }, [messages, selectedProject?.name, selectedSession?.id, activeSessions]);
+  }, [lastSystemMessage, selectedProject?.name, selectedSession?.id, activeSessions]);
 
   const fetchProjects = async () => {
     try {
@@ -258,6 +254,13 @@ function AppContent() {
       }
       const response = await api.projects();
       const data = await response.json();
+      
+      // Ensure data is an array before updating state
+      if (!Array.isArray(data)) {
+        console.error('Invalid projects data received:', data);
+        setProjects([]);
+        return;
+      }
       
       // Optimize to preserve object references when data hasn't changed
       setProjects(prevProjects => {
@@ -278,6 +281,7 @@ function AppContent() {
       });
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setProjects([]);
     } finally {
       setIsLoadingProjects(false);
     }

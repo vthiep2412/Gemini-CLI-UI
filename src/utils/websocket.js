@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 export function useWebSocket() {
   const [ws, setWs] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [lastSystemMessage, setLastSystemMessage] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef(null);
 
@@ -67,7 +68,13 @@ export function useWebSocket() {
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          setMessages(prev => [...prev, data]);
+          
+          // Separate system messages from chat messages to prevent app-wide render storms
+          if (data.type === 'projects_updated') {
+            setLastSystemMessage(data);
+          } else {
+            setMessages(prev => [...prev, data]);
+          }
         } catch (error) {
           // console.error('Error parsing WebSocket message:', error);
         }
@@ -104,6 +111,7 @@ export function useWebSocket() {
     ws,
     sendMessage,
     messages,
+    lastSystemMessage,
     isConnected
   };
 }

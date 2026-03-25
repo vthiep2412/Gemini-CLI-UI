@@ -1,27 +1,11 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import js from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
-import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
-import html from 'react-syntax-highlighter/dist/esm/languages/prism/markup';
-import css from 'react-syntax-highlighter/dist/esm/languages/prism/css';
-import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
-import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import DynamicSyntaxHighlighter from './DynamicSyntaxHighlighter';
 
-// Register languages
-SyntaxHighlighter.registerLanguage('javascript', js);
-SyntaxHighlighter.registerLanguage('python', python);
-SyntaxHighlighter.registerLanguage('html', html);
-SyntaxHighlighter.registerLanguage('css', css);
-SyntaxHighlighter.registerLanguage('bash', bash);
-SyntaxHighlighter.registerLanguage('json', json);
-SyntaxHighlighter.registerLanguage('markup', html);
-SyntaxHighlighter.registerLanguage('sh', bash);
-SyntaxHighlighter.registerLanguage('js', js);
+// Languages are now loaded lazily by DynamicSyntaxHighlighter; no static registrations here.
 
+// Restore the original CodeBlock wrapper to preserve Copy-to-Clipboard and header UI
 const CodeBlock = ({ language, value, isDarkMode }) => {
   const [copied, setCopied] = useState(false);
 
@@ -30,43 +14,32 @@ const CodeBlock = ({ language, value, isDarkMode }) => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {
-      console.error('Failed to copy code');
+      // Ignore copy errors in this environment
     });
   };
 
-  // Detect language from content if not specified
+  // Language detection if not provided
   let detectedLanguage = language;
   if (!detectedLanguage) {
-    // More comprehensive detection based on content patterns
     const lowerValue = value.toLowerCase();
-    if (lowerValue.includes('<!doctype html') || lowerValue.includes('<html') || 
-        (lowerValue.includes('<script') && lowerValue.includes('</script>'))) {
+    if (lowerValue.includes('<!doctype html') || lowerValue.includes('<html') || (lowerValue.includes('<script') && lowerValue.includes('</script>'))) {
       detectedLanguage = 'html';
     } else if (lowerValue.includes('<style') || (lowerValue.includes('{') && lowerValue.includes('}'))) {
-      // Check for CSS patterns
       if (lowerValue.match(/[.#][\w-]+\s*{/) || lowerValue.match(/^\s*[\w-]+\s*:\s*[\w-]+/m)) {
         detectedLanguage = 'css';
       } else if (value.includes('function ') || value.includes('const ') || value.includes('let ') || value.includes('var ')) {
         detectedLanguage = 'javascript';
       }
-    } else if (value.includes('function ') || value.includes('const ') || value.includes('let ') || 
-               value.includes('var ') || value.includes('=>') || value.includes('console.')) {
+    } else if (value.includes('function ') || value.includes('const ') || value.includes('let ') || value.includes('var ') || value.includes('=>') || value.includes('console.')) {
       detectedLanguage = 'javascript';
-    } else if (value.includes('def ') || value.includes('import ') || value.includes('from ') || 
-               value.includes('class ') || value.includes('print(')) {
+    } else if (value.includes('def ') || value.includes('import ') || value.includes('from ') || value.includes('class ') || value.includes('print(')) {
       detectedLanguage = 'python';
     } else if (value.includes('<?php')) {
       detectedLanguage = 'php';
-    } else if (lowerValue.includes('select ') || lowerValue.includes('from ') || 
-               lowerValue.includes('insert ') || lowerValue.includes('update ')) {
+    } else if (lowerValue.includes('select ') || lowerValue.includes('from ') || lowerValue.includes('insert ') || lowerValue.includes('update ')) {
       detectedLanguage = 'sql';
     } else if (value.trim().startsWith('{') && value.trim().endsWith('}')) {
-      try {
-        JSON.parse(value);
-        detectedLanguage = 'json';
-      } catch (e) {
-        // Not valid JSON
-      }
+      try { JSON.parse(value); detectedLanguage = 'json'; } catch {}
     } else if (value.includes('#!/bin/bash') || value.includes('#!/bin/sh')) {
       detectedLanguage = 'bash';
     }
@@ -75,54 +48,20 @@ const CodeBlock = ({ language, value, isDarkMode }) => {
   return (
     <div className="relative group my-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
       <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-          {detectedLanguage || 'plaintext'}
-        </span>
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">{detectedLanguage || 'plaintext'}</span>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1.5 px-3 py-1 text-xs bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-all duration-200 shadow-sm"
         >
           {copied ? (
-            <>
-              <svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              <span className="text-green-600 dark:text-green-400">Copied!</span>
-            </>
+            <><svg className="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-green-600 dark:text-green-400">Copied!</span></>
           ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copy
-            </>
+            <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>Copy</>
           )}
         </button>
       </div>
       <div className="relative overflow-x-auto">
-        <SyntaxHighlighter
-          language={detectedLanguage || 'text'}
-          style={isDarkMode ? oneDark : oneLight}
-          customStyle={{
-            margin: 0,
-            padding: '1rem',
-            background: isDarkMode ? '#1e1e2e' : '#ffffff',
-            fontSize: '0.8125rem',
-            lineHeight: '1.6',
-            fontFamily: 'JetBrains Mono, Monaco, Consolas, monospace',
-          }}
-          showLineNumbers={value.split('\n').length > 5}
-          wrapLines={true}
-          wrapLongLines={true}
-          lineNumberStyle={{
-            minWidth: '2.5em',
-            paddingRight: '1em',
-            color: isDarkMode ? '#4a5568' : '#a0aec0',
-            fontSize: '0.75rem'
-          }}
-        >
-          {value}
-        </SyntaxHighlighter>
+        <DynamicSyntaxHighlighter language={detectedLanguage || 'text'} code={value} isDarkMode={isDarkMode} showLineNumbers={value.split('\n').length > 5} wrapLines={true} wrapLongLines={true} />
       </div>
     </div>
   );
@@ -183,13 +122,9 @@ export const EnhancedMessageRenderer = ({ content, isDarkMode = true }) => {
             const language = match ? match[1] : '';
             const value = String(children).replace(/\n$/, '');
             
-            return (
-              <CodeBlock
-                language={language}
-                value={value}
-                isDarkMode={isDarkMode}
-              />
-            );
+          return (
+            <CodeBlock language={language} value={value} isDarkMode={isDarkMode} />
+          );
           },
           pre: ({ children }) => {
             // Pass through - code blocks are handled by code component

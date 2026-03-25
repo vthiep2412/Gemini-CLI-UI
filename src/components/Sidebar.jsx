@@ -219,7 +219,8 @@ function Sidebar({
   };
 
   // Combined sorting: starred projects first, then by selected order
-  const sortedProjects = [...projects].sort((a, b) => {
+  const projectsArray = Array.isArray(projects) ? projects : [];
+  const sortedProjects = [...projectsArray].sort((a, b) => {
     const aStarred = isProjectStarred(a.name);
     const bStarred = isProjectStarred(b.name);
     
@@ -1307,15 +1308,15 @@ function Sidebar({
         {/* Desktop Settings */}
         <Button
           variant="ghost"
-          className="hidden md:flex w-full justify-start gap-2 p-2 h-auto font-normal text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
+          className="hidden md:flex w-full justify-start gap-4 p-2 h-auto font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200 pl-6"
           onClick={onShowSettings}
         >
-          <Settings className="w-3 h-3" />
-          <span className="text-xs">Tools Settings</span>
+          <Settings className="w-6 h-6" />
+          <span className="text-base">Settings</span>
         </Button>
       </div>
     </div>
   );
 }
 
-export default Sidebar;
+export default React.memo(Sidebar);

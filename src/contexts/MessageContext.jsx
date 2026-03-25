@@ -4,7 +4,7 @@ import { useWebSocket } from '../utils/websocket';
 const MessageContext = createContext();
 
 export const MessageProvider = ({ children }) => {
-  const { ws, sendMessage, messages, isConnected } = useWebSocket();
+  const { ws, sendMessage, messages, lastSystemMessage, isConnected } = useWebSocket();
   
   // We can add additional message processing logic here if needed
   
@@ -12,6 +12,7 @@ export const MessageProvider = ({ children }) => {
     ws,
     sendMessage,
     messages,
+    lastSystemMessage,
     isConnected
   };
 
