@@ -330,6 +330,20 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
     }
+
+    // Security check - prevent path traversal
+    let actualPath;
+    try {
+      actualPath = await extractProjectDirectory(projectName);
+    } catch (error) {
+      actualPath = projectName.replace(/-/g, '/');
+    }
+    const normalizedProject = path.normalize(actualPath);
+    const normalizedFile = path.normalize(filePath);
+    const rel = path.relative(normalizedProject, normalizedFile);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return res.status(403).json({ error: 'Path traversal detected' });
+    }
     
     const content = await fsPromises.readFile(filePath, 'utf8');
     res.json({ content, path: filePath });
@@ -359,6 +373,20 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     // Security check - ensure the path is safe and absolute
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Security check - prevent path traversal
+    let actualPath;
+    try {
+      actualPath = await extractProjectDirectory(projectName);
+    } catch (error) {
+      actualPath = projectName.replace(/-/g, '/');
+    }
+    const normalizedProject = path.normalize(actualPath);
+    const normalizedFile = path.normalize(filePath);
+    const rel = path.relative(normalizedProject, normalizedFile);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return res.status(403).json({ error: 'Path traversal detected' });
     }
     
     // Check if file exists
@@ -404,6 +432,20 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     // Security check - ensure the path is safe and absolute
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Security check - prevent path traversal
+    let actualPath;
+    try {
+      actualPath = await extractProjectDirectory(projectName);
+    } catch (error) {
+      actualPath = projectName.replace(/-/g, '/');
+    }
+    const normalizedProject = path.normalize(actualPath);
+    const normalizedFile = path.normalize(filePath);
+    const rel = path.relative(normalizedProject, normalizedFile);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return res.status(403).json({ error: 'Path traversal detected' });
     }
     
     if (content === undefined) {
