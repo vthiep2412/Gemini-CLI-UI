@@ -299,6 +299,21 @@ app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => 
   }
 });
 
+
+// Security helper: Check if a file path is safely contained within the project directory
+async function isPathInsideProject(projectName, filePath) {
+  let actualPath;
+  try {
+    actualPath = await extractProjectDirectory(projectName);
+  } catch (error) {
+    actualPath = projectName.replace(/-/g, '/');
+  }
+  const normalizedProject = path.normalize(actualPath);
+  const normalizedFile = path.normalize(filePath);
+  const rel = path.relative(normalizedProject, normalizedFile);
+  return !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 // Create project endpoint
 app.post('/api/projects/create', authenticateToken, async (req, res) => {
   try {
@@ -332,16 +347,7 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     }
 
     // Security check - prevent path traversal
-    let actualPath;
-    try {
-      actualPath = await extractProjectDirectory(projectName);
-    } catch (error) {
-      actualPath = projectName.replace(/-/g, '/');
-    }
-    const normalizedProject = path.normalize(actualPath);
-    const normalizedFile = path.normalize(filePath);
-    const rel = path.relative(normalizedProject, normalizedFile);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (!(await isPathInsideProject(projectName, filePath))) {
       return res.status(403).json({ error: 'Path traversal detected' });
     }
     
@@ -376,16 +382,7 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     }
 
     // Security check - prevent path traversal
-    let actualPath;
-    try {
-      actualPath = await extractProjectDirectory(projectName);
-    } catch (error) {
-      actualPath = projectName.replace(/-/g, '/');
-    }
-    const normalizedProject = path.normalize(actualPath);
-    const normalizedFile = path.normalize(filePath);
-    const rel = path.relative(normalizedProject, normalizedFile);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (!(await isPathInsideProject(projectName, filePath))) {
       return res.status(403).json({ error: 'Path traversal detected' });
     }
     
@@ -435,16 +432,7 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     }
 
     // Security check - prevent path traversal
-    let actualPath;
-    try {
-      actualPath = await extractProjectDirectory(projectName);
-    } catch (error) {
-      actualPath = projectName.replace(/-/g, '/');
-    }
-    const normalizedProject = path.normalize(actualPath);
-    const normalizedFile = path.normalize(filePath);
-    const rel = path.relative(normalizedProject, normalizedFile);
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (!(await isPathInsideProject(projectName, filePath))) {
       return res.status(403).json({ error: 'Path traversal detected' });
     }
     
