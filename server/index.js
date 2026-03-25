@@ -305,13 +305,13 @@ async function isPathInsideProject(projectName, filePath) {
   let actualPath;
   try {
     actualPath = await extractProjectDirectory(projectName);
+    const realProject = await fsPromises.realpath(actualPath);
+    const realFile = await fsPromises.realpath(filePath);
+    const rel = path.relative(realProject, realFile);
+    return !rel.startsWith('..') && !path.isAbsolute(rel);
   } catch (error) {
-    actualPath = projectName.replace(/-/g, '/');
+    return false; // Fail safely on invalid project names, nonexistent files, or realpath errors
   }
-  const normalizedProject = path.normalize(actualPath);
-  const normalizedFile = path.normalize(filePath);
-  const rel = path.relative(normalizedProject, normalizedFile);
-  return !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
 // Create project endpoint
