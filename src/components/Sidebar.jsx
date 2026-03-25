@@ -221,6 +221,12 @@ function Sidebar({
   // Combined sorting: starred projects first, then by selected order
   const sortedProjects = useMemo(() => {
     const projectsArray = Array.isArray(projects) ? projects : [];
+
+    // Precompute last-activity timestamps so the sort comparator can do O(1) lookups.
+    const lastActivityByProjectName = new Map(
+      projectsArray.map((project) => [project.name, getProjectLastActivity(project)])
+    );
+
     return [...projectsArray].sort((a, b) => {
       const aStarred = isProjectStarred(a.name);
       const bStarred = isProjectStarred(b.name);
@@ -232,7 +238,9 @@ function Sidebar({
       // For projects with same starred status, sort by selected order
       if (projectSortOrder === 'date') {
         // Sort by most recent activity (descending)
-        return getProjectLastActivity(b) - getProjectLastActivity(a);
+        const aLastActivity = lastActivityByProjectName.get(a.name) ?? 0;
+        const bLastActivity = lastActivityByProjectName.get(b.name) ?? 0;
+        return bLastActivity - aLastActivity;
       } else {
         // Sort by display name (user-defined) or fallback to name (ascending)
         const nameA = a.displayName || a.name;
@@ -397,10 +405,12 @@ function Sidebar({
 
   // Filter projects based on search input
   const filteredProjects = useMemo(() => {
-    return sortedProjects.filter(project => {
-      if (!searchFilter.trim()) return true;
+    const trimmed = searchFilter.trim();
+    if (!trimmed) return sortedProjects;
 
-      const searchLower = searchFilter.toLowerCase();
+    const searchLower = trimmed.toLowerCase();
+
+    return sortedProjects.filter(project => {
       const displayName = (project.displayName || project.name).toLowerCase();
       const projectName = project.name.toLowerCase();
 
