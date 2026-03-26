@@ -299,6 +299,21 @@ app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => 
   }
 });
 
+
+// Security helper: Check if a file path is safely contained within the project directory
+async function isPathInsideProject(projectName, filePath) {
+  let actualPath;
+  try {
+    actualPath = await extractProjectDirectory(projectName);
+    const realProject = await fsPromises.realpath(actualPath);
+    const realFile = await fsPromises.realpath(filePath);
+    const rel = path.relative(realProject, realFile);
+    return !rel.startsWith('..') && !path.isAbsolute(rel);
+  } catch (error) {
+    return false; // Fail safely on invalid project names, nonexistent files, or realpath errors
+  }
+}
+
 // Create project endpoint
 app.post('/api/projects/create', authenticateToken, async (req, res) => {
   try {
@@ -330,6 +345,11 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
     }
+
+    // Security check - prevent path traversal
+    if (!(await isPathInsideProject(projectName, filePath))) {
+      return res.status(403).json({ error: 'Path traversal detected' });
+    }
     
     const content = await fsPromises.readFile(filePath, 'utf8');
     res.json({ content, path: filePath });
@@ -359,6 +379,11 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     // Security check - ensure the path is safe and absolute
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Security check - prevent path traversal
+    if (!(await isPathInsideProject(projectName, filePath))) {
+      return res.status(403).json({ error: 'Path traversal detected' });
     }
     
     // Check if file exists
@@ -404,6 +429,11 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     // Security check - ensure the path is safe and absolute
     if (!filePath || !path.isAbsolute(filePath)) {
       return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    // Security check - prevent path traversal
+    if (!(await isPathInsideProject(projectName, filePath))) {
+      return res.status(403).json({ error: 'Path traversal detected' });
     }
     
     if (content === undefined) {

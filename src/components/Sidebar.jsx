@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -191,19 +191,19 @@ function Sidebar({
     }
   };
 
-  const isProjectStarred = (projectName) => {
+  const isProjectStarred = useCallback((projectName) => {
     return starredProjects.has(projectName);
-  };
+  }, [starredProjects]);
 
   // Helper function to get all sessions for a project (initial + additional)
-  const getAllSessions = (project) => {
+  const getAllSessions = useCallback((project) => {
     const initialSessions = project.sessions || [];
     const additional = additionalSessions[project.name] || [];
     return [...initialSessions, ...additional];
-  };
+  }, [additionalSessions]);
 
   // Helper function to get the last activity date for a project
-  const getProjectLastActivity = (project) => {
+  const getProjectLastActivity = useCallback((project) => {
     const allSessions = getAllSessions(project);
     if (allSessions.length === 0) {
       return new Date(0); // Return epoch date for projects with no sessions
@@ -216,29 +216,39 @@ function Sidebar({
     }, new Date(0));
     
     return mostRecentDate;
-  };
+  }, [getAllSessions]);
 
   // Combined sorting: starred projects first, then by selected order
-  const projectsArray = Array.isArray(projects) ? projects : [];
-  const sortedProjects = [...projectsArray].sort((a, b) => {
-    const aStarred = isProjectStarred(a.name);
-    const bStarred = isProjectStarred(b.name);
-    
-    // First, sort by starred status
-    if (aStarred && !bStarred) return -1;
-    if (!aStarred && bStarred) return 1;
-    
-    // For projects with same starred status, sort by selected order
-    if (projectSortOrder === 'date') {
-      // Sort by most recent activity (descending)
-      return getProjectLastActivity(b) - getProjectLastActivity(a);
-    } else {
-      // Sort by display name (user-defined) or fallback to name (ascending)
-      const nameA = a.displayName || a.name;
-      const nameB = b.displayName || b.name;
-      return nameA.localeCompare(nameB);
-    }
-  });
+  const sortedProjects = useMemo(() => {
+    const projectsArray = Array.isArray(projects) ? projects : [];
+
+    // Precompute last-activity timestamps so the sort comparator can do O(1) lookups.
+    const lastActivityByProjectName = new Map(
+      projectsArray.map((project) => [project.name, getProjectLastActivity(project)])
+    );
+
+    return [...projectsArray].sort((a, b) => {
+      const aStarred = isProjectStarred(a.name);
+      const bStarred = isProjectStarred(b.name);
+
+      // First, sort by starred status
+      if (aStarred && !bStarred) return -1;
+      if (!aStarred && bStarred) return 1;
+
+      // For projects with same starred status, sort by selected order
+      if (projectSortOrder === 'date') {
+        // Sort by most recent activity (descending)
+        const aLastActivity = lastActivityByProjectName.get(a.name) ?? 0;
+        const bLastActivity = lastActivityByProjectName.get(b.name) ?? 0;
+        return bLastActivity - aLastActivity;
+      } else {
+        // Sort by display name (user-defined) or fallback to name (ascending)
+        const nameA = a.displayName || a.name;
+        const nameB = b.displayName || b.name;
+        return nameA.localeCompare(nameB);
+      }
+    });
+  }, [projects, isProjectStarred, projectSortOrder, getProjectLastActivity]);
 
   const startEditing = (project) => {
     setEditingProject(project.name);
@@ -394,16 +404,20 @@ function Sidebar({
   };
 
   // Filter projects based on search input
-  const filteredProjects = sortedProjects.filter(project => {
-    if (!searchFilter.trim()) return true;
-    
-    const searchLower = searchFilter.toLowerCase();
-    const displayName = (project.displayName || project.name).toLowerCase();
-    const projectName = project.name.toLowerCase();
-    
-    // Search in both display name and actual project name/path
-    return displayName.includes(searchLower) || projectName.includes(searchLower);
-  });
+  const filteredProjects = useMemo(() => {
+    const trimmed = searchFilter.trim();
+    if (!trimmed) return sortedProjects;
+
+    const searchLower = trimmed.toLowerCase();
+
+    return sortedProjects.filter(project => {
+      const displayName = (project.displayName || project.name).toLowerCase();
+      const projectName = project.name.toLowerCase();
+
+      // Search in both display name and actual project name/path
+      return displayName.includes(searchLower) || projectName.includes(searchLower);
+    });
+  }, [sortedProjects, searchFilter]);
 
   return (
     <div className="h-full flex flex-col bg-card md:select-none">
