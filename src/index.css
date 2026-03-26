@@ -207,6 +207,14 @@
     border: 7px solid transparent;
   }
 
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Gemini-specific styles */

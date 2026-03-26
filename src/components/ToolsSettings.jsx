@@ -1,10 +1,118 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Volume2 } from 'lucide-react';
+import Switch from './ui/Switch';
+import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Volume2, Lock, Unlock, HelpCircle, ChevronDown } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+
+// --- Stable Helper Components (Defined Outside to preserve exit animations) ---
+
+const ModernSelect = ({ id, value, onChange, options, placeholder = "Select...", className = "", dropdownClassName = "", dropdownRef, isOpen, setIsOpen }) => (
+  <div className={`relative ${className}`} ref={dropdownRef}>
+    <button 
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsOpen(!isOpen);
+      }}
+      className="w-full flex items-center justify-between gap-2 bg-muted/60 hover:bg-muted/80 border border-border/80 rounded-xl px-4 py-2.5 text-sm font-medium transition-all hover:border-blue-500/50 text-foreground shadow-sm"
+    >
+      <span className="truncate">{options.find(o => o.value === value)?.label || placeholder}</span>
+      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+    </button>
+    
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key={`ms-${id}`}
+          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className={`absolute mt-2 max-h-64 overflow-y-auto scrollbar-none bg-background/95 backdrop-blur-2xl border border-border/80 rounded-2xl shadow-2xl z-[100] py-2 overflow-hidden ${dropdownClassName || 'left-0 right-0'}`}
+        >
+          {options.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-4 py-3 text-sm transition-all flex flex-col gap-1 ${
+                value === option.value 
+                  ? 'bg-blue-600/40 text-white font-semibold shadow-xl shadow-blue-500/10 backdrop-blur-sm' 
+                  : 'hover:bg-blue-500/10 text-foreground/80 hover:text-blue-600 dark:hover:text-blue-400'
+              }`}
+            >
+              <span className={value === option.value ? "font-bold" : "font-medium"}>{option.label}</span>
+              {option.description && (
+                <span className={`text-xs font-normal leading-tight ${
+                  value === option.value ? "text-white/90" : "opacity-70"
+                }`}>
+                  {option.description}
+                </span>
+              )}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
+
+const ToolQuickAdd = ({ id, isOpen, setIsOpen, dropdownRef, tools, currentTools, onSelect, colorClass = "green" }) => (
+  <div className="relative" ref={dropdownRef}>
+    <button 
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsOpen(!isOpen);
+      }}
+      className={`flex items-center gap-1.5 bg-muted/60 hover:bg-muted/80 border border-border/60 rounded-lg px-3 py-1.5 text-[10px] font-bold uppercase tracking-tighter cursor-pointer outline-none transition-all hover:border-${colorClass}-500/50 text-foreground shadow-sm`}
+    >
+      Quick Add
+      <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+    </button>
+    
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key={`tqa-${id}`}
+          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+          className="absolute right-0 mt-2 w-48 max-h-56 overflow-y-auto scrollbar-none bg-background/95 backdrop-blur-xl border border-border/80 rounded-xl shadow-2xl z-[100] py-1.5 overflow-hidden"
+        >
+          {tools.filter(t => !currentTools.includes(t)).length > 0 ? (
+            tools.filter(t => !currentTools.includes(t)).map(tool => (
+              <button
+                key={tool}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(tool);
+                  setIsOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2 text-xs hover:bg-${colorClass}-500/10 hover:text-${colorClass}-500 transition-colors flex items-center gap-2`}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full bg-${colorClass}-500/50`} />
+                {tool}
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-2 text-[10px] text-muted-foreground italic text-center">All tools added</div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+);
 
 function ToolsSettings({ isOpen, onClose }) {
   const { isDarkMode, toggleDarkMode } = useTheme();
@@ -41,15 +149,53 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpConfigTested, setMcpConfigTested] = useState(false);
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
-  const [activeTab, setActiveTab] = useState('tools');
+  const [activeTab, setActiveTab] = useState('general');
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
+  const [notificationSoundType, setNotificationSoundType] = useState('chime');
+  const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
+  const [showDisallowedDropdown, setShowDisallowedDropdown] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [showSoundDropdown, setShowSoundDropdown] = useState(false);
+  const allowedDropdownRef = useRef(null);
+  const disallowedDropdownRef = useRef(null);
+  const modelDropdownRef = useRef(null);
+  const sortDropdownRef = useRef(null);
+  const soundDropdownRef = useRef(null);
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (allowedDropdownRef.current && !allowedDropdownRef.current.contains(event.target)) {
+        setShowAllowedDropdown(false);
+      }
+      if (disallowedDropdownRef.current && !disallowedDropdownRef.current.contains(event.target)) {
+        setShowDisallowedDropdown(false);
+      }
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
+        setShowModelDropdown(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target)) {
+        setShowSortDropdown(false);
+      }
+      if (soundDropdownRef.current && !soundDropdownRef.current.contains(event.target)) {
+        setShowSoundDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Common tool patterns
   const commonTools = [
+    'Bash',
     'Bash(git log:*)',
     'Bash(git diff:*)',
     'Bash(git status:*)',
+    'Bash(npm test:*)',
+    'Bash(ls:*)',
+    'Bash(cat:*)',
     'Write',
     'write_file',
     'Read',
@@ -61,13 +207,28 @@ function ToolsSettings({ isOpen, onClose }) {
     'TodoWrite',
     'TodoRead',
     'WebFetch',
-    'WebSearch'
+    'WebSearch',
+    'Create',
+    'Delete'
   ];
   
   // Available Gemini models (tested and verified)
   const availableModels = [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient latest model (Recommended)' },
     { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most advanced model (Note: May have quota limits)' }
+  ];
+
+  const availableSorts = [
+    { value: 'name', label: 'Alphabetical', description: 'Sort projects by name' },
+    { value: 'date', label: 'Recent Activity', description: 'Most recent projects first' }
+  ];
+
+  const availableSounds = [
+    { value: 'chime', label: 'Chime', description: 'Classic two-tone notification' },
+    { value: 'ping', label: 'Ping', description: 'Short high-pitched alert' },
+    { value: 'pulse', label: 'Pulse', description: 'Soft pulsing heartbeat' },
+    { value: 'tech', label: 'Digital', description: 'Quick tech-style blip' },
+    { value: 'calm', label: 'Calm', description: 'Gentle fading melody' }
   ];
 
   // MCP API functions
@@ -299,6 +460,7 @@ function ToolsSettings({ isOpen, onClose }) {
         setProjectSortOrder(settings.projectSortOrder || 'name');
         setSelectedModel(settings.selectedModel || 'gemini-2.5-flash');
         setEnableNotificationSound(settings.enableNotificationSound || false);
+        setNotificationSoundType(settings.notificationSoundType || 'chime');
       } else {
         // Set defaults
         setAllowedTools([]);
@@ -331,6 +493,7 @@ function ToolsSettings({ isOpen, onClose }) {
         projectSortOrder,
         selectedModel,
         enableNotificationSound,
+        notificationSoundType,
         lastUpdated: new Date().toISOString()
       };
       
@@ -381,7 +544,6 @@ function ToolsSettings({ isOpen, onClose }) {
   const removeDisallowedTool = (tool) => {
     setDisallowedTools(disallowedTools.filter(t => t !== tool));
   };
-
   // MCP form handling functions
   const resetMcpForm = () => {
     setMcpFormData({
@@ -527,444 +689,494 @@ function ToolsSettings({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
+  const tabItems = [
+    { id: 'general', label: 'General', icon: <Settings className="w-4 h-4" /> },
+    { id: 'tools', label: 'Tools', icon: <Shield className="w-4 h-4" /> },
+    { id: 'mcp', label: 'MCP Servers', icon: <Server className="w-4 h-4" /> },
+    { id: 'appearance', label: 'Appearance', icon: <Moon className="w-4 h-4" /> },
+  ];
+
   return (
-    <div className="modal-backdrop fixed inset-0 flex items-center justify-center z-[100] md:p-4 bg-background/95">
-      <div className="bg-background border border-border md:rounded-lg shadow-xl w-full md:max-w-4xl h-full md:h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 md:p-6 border-b border-border flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Settings className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
-            <h2 className="text-lg md:text-xl font-semibold text-foreground">
-              Settings
-            </h2>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-10 pointer-events-none">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground touch-manipulation"
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm pointer-events-auto"
+          />
+
+          {/* Modal Container */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="relative bg-background/80 dark:bg-card/70 backdrop-blur-xl border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.08)] rounded-2xl w-full max-w-4xl h-full max-h-[600px] flex flex-col md:flex-row overflow-hidden pointer-events-auto"
           >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {/* Tab Navigation */}
-          <div className="border-b border-border">
-            <div className="flex px-4 md:px-6">
-              <button
-                onClick={() => setActiveTab('tools')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'tools'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Tools
-              </button>
-              <button
-                onClick={() => setActiveTab('appearance')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'appearance'
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Appearance
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4 md:p-6 space-y-6 md:space-y-8 pb-safe-area-inset-bottom">
-            
-            {/* Appearance Tab */}
-            {activeTab === 'appearance' && (
-              <div className="space-y-6 md:space-y-8">
-               {activeTab === 'appearance' && (
-  <div className="space-y-6 md:space-y-8">
-    {/* Theme Settings */}
-    <div className="space-y-4">
-      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium text-foreground">
-              Dark Mode
-            </div>
-            <div className="text-sm text-muted-foreground">
-              Toggle between light and dark themes
-            </div>
-          </div>
-          <button
-            onClick={toggleDarkMode}
-            className="relative inline-flex h-8 w-14 items-center rounded-full bg-gray-200 dark:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
-            role="switch"
-            aria-checked={isDarkMode}
-            aria-label="Toggle dark mode"
-          >
-            <span className="sr-only">Toggle dark mode</span>
-            <span
-              className={`${
-                isDarkMode ? 'translate-x-7' : 'translate-x-1'
-              } inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform duration-200 flex items-center justify-center`}
-            >
-              {isDarkMode ? (
-                <Moon className="w-3.5 h-3.5 text-gray-700" />
-              ) : (
-                <Sun className="w-3.5 h-3.5 text-yellow-500" />
-              )}
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {/* Project Sorting */}
-    <div className="space-y-4">
-      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium text-foreground">
-              Project Sorting
-            </div>
-            <div className="text-sm text-muted-foreground">
-              How projects are ordered in the sidebar
-            </div>
-          </div>
-          <select
-            value={projectSortOrder}
-            onChange={(e) => setProjectSortOrder(e.target.value)}
-            className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-32"
-          >
-            <option value="name">Alphabetical</option>
-            <option value="date">Recent Activity</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
+            {/* Sidebar Navigation */}
+            <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border/50 bg-background/40 flex-shrink-0">
+              <div className="p-6">
+                <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-400">
+                  Settings
+                </h2>
               </div>
-            )}
-
-            {/* Tools Tab */}
-            {activeTab === 'tools' && (
-              <div className="space-y-6 md:space-y-8">
-            
-            {/* Model Selection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Zap className="w-5 h-5 text-cyan-500" />
-                <h3 className="text-lg font-medium text-foreground">
-                  Gemini Model
-                </h3>
-              </div>
-              <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-lg p-4">
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-foreground">
-                    Select Model
-                  </label>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-cyan-500 focus:border-cyan-500"
+              <nav className="px-3 pb-6 space-y-1">
+                {tabItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      activeTab === item.id
+                        ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
                   >
-                    {availableModels.map(model => (
-                      <option key={model.value} value={model.value}>
-                        {model.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {availableModels.find(m => m.value === selectedModel)?.description}
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Skip Permissions */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                <h3 className="text-lg font-medium text-foreground">
-                  Permission Settings
-                </h3>
-              </div>
-              <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={skipPermissions}
-                    onChange={(e) => setSkipPermissions(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <div>
-                    <div className="font-medium text-orange-900 dark:text-orange-100">
-                      YOLO mode - Skip all confirmations
-                    </div>
-                    <div className="text-sm text-orange-700 dark:text-orange-300">
-                      Equivalent to --yolo flag (use with caution)
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Notification Sound Settings */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Volume2 className="w-5 h-5 text-blue-500" />
-                <h3 className="text-lg font-medium text-foreground">
-                  Notification Settings
-                </h3>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={enableNotificationSound}
-                      onChange={(e) => setEnableNotificationSound(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <div>
-                      <div className="font-medium text-blue-900 dark:text-blue-100">
-                        Enable notification sound
-                      </div>
-                      <div className="text-sm text-blue-700 dark:text-blue-300">
-                        Play a sound when Gemini responds
-                      </div>
-                    </div>
-                  </label>
-                  {enableNotificationSound && (
-                    <button
-                      onClick={async () => {
-                        const { playNotificationSound } = await import('../utils/notificationSound');
-                        // Temporarily enable sound for testing
-                        const currentSettings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
-                        localStorage.setItem('gemini-tools-settings', JSON.stringify({
-                          ...currentSettings,
-                          enableNotificationSound: true
-                        }));
-                        playNotificationSound();
-                        // Restore original settings
-                        localStorage.setItem('gemini-tools-settings', JSON.stringify(currentSettings));
-                      }}
-                      className="ml-7 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                    >
-                      Test Sound
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Allowed Tools */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Shield className="w-5 h-5 text-green-500" />
-                <h3 className="text-lg font-medium text-foreground">
-                  Allowed Tools
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Tools that are automatically allowed without prompting for permission
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  value={newAllowedTool}
-                  onChange={(e) => setNewAllowedTool(e.target.value)}
-                  placeholder='e.g., "Bash(git log:*)" or "Write"'
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      addAllowedTool(newAllowedTool);
-                    }
-                  }}
-                  className="flex-1 h-10 touch-manipulation"
-                  style={{ fontSize: '16px' }}
-                />
-                <Button
-                  onClick={() => addAllowedTool(newAllowedTool)}
-                  disabled={!newAllowedTool}
-                  size="sm"
-                  className="h-10 px-4 touch-manipulation"
-                >
-                  <Plus className="w-4 h-4 mr-2 sm:mr-0" />
-                  <span className="sm:hidden">Add Tool</span>
-                </Button>
-              </div>
-
-              {/* Common tools quick add */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Quick add common tools:
-                </p>
-                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-                  {commonTools.map(tool => (
-                    <Button
-                      key={tool}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addAllowedTool(tool)}
-                      disabled={allowedTools.includes(tool)}
-                      className="text-xs h-8 touch-manipulation truncate"
-                    >
-                      {tool}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {allowedTools.map(tool => (
-                  <div key={tool} className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
-                    <span className="font-mono text-sm text-green-800 dark:text-green-200">
-                      {tool}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeAllowedTool(tool)}
-                      className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
+                    {item.icon}
+                    {item.label}
+                  </button>
                 ))}
-                {allowedTools.length === 0 && (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No allowed tools configured
-                  </div>
-                )}
-              </div>
+              </nav>
             </div>
 
-            {/* Disallowed Tools */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
-                <h3 className="text-lg font-medium text-foreground">
-                  Disallowed Tools
-                </h3>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Tools that are automatically blocked without prompting for permission
-              </p>
-              
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  value={newDisallowedTool}
-                  onChange={(e) => setNewDisallowedTool(e.target.value)}
-                  placeholder='e.g., "Bash(rm:*)" or "Write"'
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      addDisallowedTool(newDisallowedTool);
-                    }
-                  }}
-                  className="flex-1 h-10 touch-manipulation"
-                  style={{ fontSize: '16px' }}
-                />
-                <Button
-                  onClick={() => addDisallowedTool(newDisallowedTool)}
-                  disabled={!newDisallowedTool}
-                  size="sm"
-                  className="h-10 px-4 touch-manipulation"
-                >
-                  <Plus className="w-4 h-4 mr-2 sm:mr-0" />
-                  <span className="sm:hidden">Add Tool</span>
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {disallowedTools.map(tool => (
-                  <div key={tool} className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                    <span className="font-mono text-sm text-red-800 dark:text-red-200">
-                      {tool}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeDisallowedTool(tool)}
-                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-w-0">
+              <ScrollArea className="flex-1">
+                <div className="p-6 space-y-8">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeTab}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="space-y-8"
                     >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-                {disallowedTools.length === 0 && (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    No disallowed tools configured
-                  </div>
-                )}
-              </div>
-            </div>
+                      {/* General Tab */}
+                      {activeTab === 'general' && (
+                        <div className="space-y-8">
+                          {/* Model Selection */}
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Zap className="w-4 h-4 text-cyan-500" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider">Gemini Model</h3>
+                            </div>
+                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 space-y-4 transition-all hover:bg-muted/70 text-left shadow-sm">
+                              <ModernSelect
+                                id="model-select"
+                                value={selectedModel}
+                                onChange={setSelectedModel}
+                                options={availableModels}
+                                placeholder="Select Model"
+                                isOpen={showModelDropdown}
+                                setIsOpen={setShowModelDropdown}
+                                dropdownRef={modelDropdownRef}
+                              />
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                {availableModels.find(m => m.value === selectedModel)?.description}
+                              </p>
+                            </div>
+                          </div>
 
-            {/* Help Section */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                Tool Pattern Examples:
-              </h4>
-              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git log:*)"</code> - Allow all git log commands</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(git diff:*)"</code> - Allow all git diff commands</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Write"</code> - Allow all Write tool usage</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Read"</code> - Allow all Read tool usage</li>
-                <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">"Bash(rm:*)"</code> - Block all rm commands (dangerous)</li>
-              </ul>
-            </div>
-            
-              </div>
-            )}
-          </div>
-        </div>
+                          {/* Behavior Settings */}
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Volume2 className="w-4 h-4 text-blue-500" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider">Notifications</h3>
+                            </div>
+                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
+                              <div>
+                                <div className="text-sm font-medium">Notification Sound</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">Play sound when Gemini responds</div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {enableNotificationSound && (
+                                  <>
+                                    <div className="w-32 sm:w-40">
+                                      <ModernSelect
+                                        id="sound-select"
+                                        value={notificationSoundType}
+                                        onChange={(val) => {
+                                          setNotificationSoundType(val);
+                                          // Test the sound immediately when selected if enabled
+                                          import('../utils/notificationSound').then(({ playNotificationSound }) => {
+                                            // Temporarily update localStorage so playNotificationSound reads the new type
+                                            const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+                                            localStorage.setItem('gemini-tools-settings', JSON.stringify({
+                                              ...settings,
+                                              notificationSoundType: val,
+                                              enableNotificationSound: true
+                                            }));
+                                            playNotificationSound();
+                                          });
+                                        }}
+                                        options={availableSounds}
+                                        placeholder="Sound"
+                                        isOpen={showSoundDropdown}
+                                        setIsOpen={setShowSoundDropdown}
+                                        dropdownRef={soundDropdownRef}
+                                        className="scale-90 origin-right"
+                                        dropdownClassName="right-0 w-48 sm:w-64"
+                                      />
+                                    </div>
+                                    <button
+                                      onClick={async () => {
+                                        const { playNotificationSound } = await import('../utils/notificationSound');
+                                        // Ensure localStorage is sync'd for the test button
+                                        const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+                                        localStorage.setItem('gemini-tools-settings', JSON.stringify({
+                                          ...settings,
+                                          notificationSoundType: notificationSoundType,
+                                          enableNotificationSound: true
+                                        }));
+                                        playNotificationSound();
+                                      }}
+                                      className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Play className="w-5 h-5" />
+                                    </button>
+                                  </>
+                                )}
+                                <Switch
+                                  checked={enableNotificationSound}
+                                  onChange={setEnableNotificationSound}
+                                  thumbContent={<Volume2 className={`w-2.5 h-2.5 transition-colors ${enableNotificationSound ? 'text-blue-600' : 'text-gray-400'}`} />}
+                                />
+                              </div>
+                            </div>
+                          </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 md:p-6 border-t border-border flex-shrink-0 gap-3 pb-safe-area-inset-bottom">
-          <div className="flex items-center justify-center sm:justify-start gap-2 order-2 sm:order-1">
-            {saveStatus === 'success' && (
-              <div className="text-green-600 dark:text-green-400 text-sm flex items-center gap-1">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-                Settings saved successfully!
-              </div>
-            )}
-            {saveStatus === 'error' && (
-              <div className="text-red-600 dark:text-red-400 text-sm flex items-center gap-1">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                Failed to save settings
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-3 order-1 sm:order-2">
-            <Button 
-              variant="outline" 
-              onClick={onClose} 
-              disabled={isSaving}
-              className="flex-1 sm:flex-none h-10 touch-manipulation"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={saveSettings} 
-              disabled={isSaving}
-              className="flex-1 sm:flex-none h-10 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 touch-manipulation"
-            >
-              {isSaving ? (
+                          {/* Permission Settings */}
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Shield className="w-4 h-4 text-orange-500" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
+                            </div>
+                            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all text-left shadow-sm">
+                              <div>
+                                <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
+                                <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
+                              </div>
+                              <Switch
+                                checked={skipPermissions}
+                                onChange={setSkipPermissions}
+                                className={skipPermissions ? "!bg-orange-600" : ""}
+                                thumbContent={<Zap className={`w-2.5 h-2.5 transition-colors ${skipPermissions ? 'text-orange-600' : 'text-gray-400'}`} />}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Appearance Tab */}
+                      {activeTab === 'appearance' && (
+                        <div className="space-y-8">
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Moon className="w-4 h-4 text-purple-500" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider">Visuals</h3>
+                            </div>
+                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
+                              <div>
+                                <div className="text-sm font-medium">Dark Mode</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">Toggle interface theme</div>
+                              </div>
+                              <Switch
+                                checked={isDarkMode}
+                                onChange={toggleDarkMode}
+                                thumbContent={isDarkMode ? <Moon className="w-2.5 h-2.5 text-blue-600" /> : <Sun className="w-2.5 h-2.5 text-yellow-500" />}
+                              />
+                            </div>
+
+                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
+                              <div>
+                                <div className="text-sm font-medium">Project Sorting</div>
+                                <div className="text-xs text-muted-foreground mt-0.5">Order of items in sidebar</div>
+                              </div>
+                              <ModernSelect
+                                id="sort-select"
+                                value={projectSortOrder}
+                                onChange={setProjectSortOrder}
+                                options={availableSorts}
+                                placeholder="Sort Order"
+                                className="w-44"
+                                isOpen={showSortDropdown}
+                                setIsOpen={setShowSortDropdown}
+                                dropdownRef={sortDropdownRef}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tools Tab */}
+                      {activeTab === 'tools' && (
+                        <div className="space-y-8">
+
+
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-foreground">
+                                <Unlock className="w-4 h-4 text-green-500" />
+                                <h3 className="text-sm font-bold uppercase tracking-wider">Allowed Tools</h3>
+                              </div>
+                              <ToolQuickAdd 
+                                id="allowed-tools"
+                                isOpen={showAllowedDropdown}
+                                setIsOpen={setShowAllowedDropdown}
+                                dropdownRef={allowedDropdownRef}
+                                tools={commonTools}
+                                currentTools={allowedTools}
+                                onSelect={addAllowedTool}
+                                colorClass="green"
+                              />
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex gap-2">
+                                <Input
+                                  value={newAllowedTool}
+                                  onChange={(e) => setNewAllowedTool(e.target.value)}
+                                  placeholder='e.g., "Bash", "Write"'
+                                  className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
+                                  onKeyPress={(e) => e.key === 'Enter' && addAllowedTool(newAllowedTool)}
+                                />
+                                <Button size="sm" onClick={() => addAllowedTool(newAllowedTool)} disabled={!newAllowedTool} className="rounded-xl h-10 w-10 p-0 shadow-lg shadow-blue-500/10">
+                                  <Plus className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
+                                {allowedTools.map(tool => (
+                                  <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-green-500/30 bg-green-500/20 dark:bg-green-500/30 text-green-800 dark:text-green-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
+                                    {tool}
+                                    <button onClick={() => removeAllowedTool(tool)} className="p-0.5 hover:bg-green-500/30 rounded-full transition-colors">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </Badge>
+                                ))}
+                                {allowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-allowed</p>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-foreground">
+                                <Lock className="w-4 h-4 text-red-500" />
+                                <h3 className="text-sm font-bold uppercase tracking-wider">Disallowed Tools</h3>
+                              </div>
+                              <ToolQuickAdd 
+                                id="blocked-tools"
+                                isOpen={showDisallowedDropdown}
+                                setIsOpen={setShowDisallowedDropdown}
+                                dropdownRef={disallowedDropdownRef}
+                                tools={commonTools}
+                                currentTools={disallowedTools}
+                                onSelect={addDisallowedTool}
+                                colorClass="red"
+                              />
+                            </div>
+                            <div className="space-y-3">
+                              <div className="flex gap-2">
+                                <Input
+                                  value={newDisallowedTool}
+                                  onChange={(e) => setNewDisallowedTool(e.target.value)}
+                                  placeholder='e.g., "Bash(rm:*)"'
+                                  className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
+                                  onKeyPress={(e) => e.key === 'Enter' && addDisallowedTool(newDisallowedTool)}
+                                />
+                                <Button size="sm" onClick={() => addDisallowedTool(newDisallowedTool)} disabled={!newDisallowedTool} className="rounded-xl h-10 w-10 p-0 variant-outline border border-red-500/30 hover:bg-red-500/10">
+                                  <Plus className="w-4 h-4" />
+                                </Button>
+                              </div>
+                              <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
+                                {disallowedTools.map(tool => (
+                                  <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-red-500/30 bg-red-500/20 dark:bg-red-500/30 text-red-800 dark:text-red-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
+                                    {tool}
+                                    <button onClick={() => removeDisallowedTool(tool)} className="p-0.5 hover:bg-red-500/30 rounded-full transition-colors">
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </Badge>
+                                ))}
+                                {disallowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-blocked</p>}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-6 bg-blue-500/15 border border-blue-500/30 rounded-2xl space-y-3 text-left shadow-sm">
+                            <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tight flex items-center gap-2">
+                              <HelpCircle className="w-4 h-4" /> Tool Pattern Help
+                            </h4>
+                            <div className="text-xs text-muted-foreground leading-relaxed">
+                              Use patterns like <code className="text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/20">Bash(git log:*)</code> to allow specific commands without full YOLO mode.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* MCP Tab */}
+                      {activeTab === 'mcp' && (
+                        <div className="space-y-8">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Server className="w-4 h-4 text-blue-500" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider">MCP Servers</h3>
+                            </div>
+                            <Button size="sm" onClick={() => openMcpForm()} className="rounded-lg h-8 px-3 text-xs">
+                              Add Server
+                            </Button>
+                          </div>
+
+                          <AnimatePresence mode="wait">
+                            {showMcpForm ? (
+                              <motion.form
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                onSubmit={handleMcpSubmit}
+                                className="bg-muted/30 border border-border/50 rounded-2xl p-6 space-y-6 text-left"
+                              >
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-foreground/90">Server Name</label>
+                                    <Input
+                                      value={mcpFormData.name}
+                                      onChange={(e) => setMcpFormData({ ...mcpFormData, name: e.target.value })}
+                                      className="h-9 border-border/50 bg-background"
+                                      required
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-bold text-foreground/90">Transport</label>
+                                    <select
+                                      value={mcpFormData.type}
+                                      onChange={(e) => setMcpFormData({ ...mcpFormData, type: e.target.value })}
+                                      className="w-full h-9 px-2 bg-background border border-border/50 rounded-lg text-sm outline-none"
+                                    >
+                                      <option value="stdio">stdio (Local)</option>
+                                      <option value="sse">sse (Remote)</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-bold text-foreground/90">
+                                    {mcpFormData.type === 'stdio' ? 'Command' : 'Endpoint URL'}
+                                  </label>
+                                  <Input
+                                    value={mcpFormData.type === 'stdio' ? mcpFormData.config.command : mcpFormData.config.url}
+                                    onChange={(e) => updateMcpConfig(mcpFormData.type === 'stdio' ? 'command' : 'url', e.target.value)}
+                                    className="h-9 border-border/50 bg-background"
+                                    placeholder={mcpFormData.type === 'stdio' ? 'e.g., node, python, etc.' : 'https://...'}
+                                    required
+                                  />
+                                </div>
+
+                                <div className="flex items-center gap-3 pt-2">
+                                  <Button type="submit" disabled={mcpLoading} className="flex-1 rounded-xl h-10 shadow-lg shadow-blue-500/20">
+                                    {mcpLoading ? 'Saving...' : editingMcpServer ? 'Update' : 'Add Server'}
+                                  </Button>
+                                  <Button type="button" variant="ghost" onClick={resetMcpForm} className="rounded-xl h-10 border border-border/50">
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </motion.form>
+                            ) : (
+                              <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="space-y-3"
+                              >
+                                {mcpServers.length === 0 ? (
+                                  <div className="text-center py-10 border-2 border-dashed border-border/30 rounded-2xl">
+                                    <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+                                    <p className="text-sm text-muted-foreground">No MCP servers configured</p>
+                                  </div>
+                                ) : (
+                                  mcpServers.map(server => (
+                                    <div key={server.id} className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left group shadow-sm">
+                                      <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-background border border-border/50 rounded-lg group-hover:bg-blue-600/10 group-hover:border-blue-500/30 transition-colors">
+                                          {getTransportIcon(server.type)}
+                                        </div>
+                                        <div>
+                                          <div className="text-sm font-medium">{server.name}</div>
+                                          <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{server.type}</div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => openMcpForm(server)} className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-md transition-all">
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => handleMcpDelete(server.id, server.scope)} className="p-1.5 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-md transition-all">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </ScrollArea>
+
+              {/* Footer Actions */}
+              <div className="p-4 bg-muted/20 border-t border-border/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Saving...
+                  <AnimatePresence>
+                    {saveStatus === 'success' && (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-xs font-medium text-green-500 flex items-center gap-1"
+                      >
+                        <Shield className="w-3 h-3" /> Settings auto-applied
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              ) : (
-                'Save Settings'
-              )}
-            </Button>
-          </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onClose}
+                    className="rounded-xl h-9 px-4 text-xs font-medium hover:bg-muted"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={saveSettings}
+                    disabled={isSaving}
+                    className="rounded-xl h-9 px-6 text-xs font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                  >
+                    {isSaving ? 'Applying...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Close Button Overlay */}
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all md:hidden pointer-events-auto"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
 }
 
 export default ToolsSettings;
+
