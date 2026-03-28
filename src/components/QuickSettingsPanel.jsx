@@ -30,7 +30,8 @@ const QuickSettingsPanel = ({
   onShowRawParametersChange,
   autoScrollToBottom,
   onAutoScrollChange,
-  isMobile
+  isMobile,
+  activeTab = 'chat'
 }) => {
   const [localIsOpen, setLocalIsOpen] = useState(isOpen);
   const { isDarkMode } = useTheme();
@@ -49,7 +50,7 @@ const QuickSettingsPanel = ({
     <>
       {/* Floating Settings Button */}
       <AnimatePresence>
-        {!localIsOpen && (
+        {!localIsOpen && activeTab === 'chat' && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
