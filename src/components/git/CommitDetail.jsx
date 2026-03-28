@@ -1,166 +1,67 @@
-/**
- * CommitDetail.jsx — Full commit inspection panel shown in the left pane
- * when a graph node is clicked. Replaces the FileTree+CommitInput.
- *
- * Shows: metadata header + per-file change list with expandable code diffs.
- * Optimized for performance using React memo and standard CSS-based scroll.
- */
-import React, { useMemo, useState, memo } from 'react';
-import { X, Calendar, User, Hash, FileText, ChevronRight, ChevronDown, Copy, ExternalLink, ArrowLeft, GitCommit } from 'lucide-react';
-import Tooltip from '../common/Tooltip';
+import React, { useMemo, useState } from 'react';
+import { ChevronRight, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import Tooltip from '../common/Tooltip';
+
 import { useGitStore } from '../../hooks/gitStore';
+import MonacoDiffViewer from '../common/MonacoDiffViewer';
+import { authenticatedFetch } from '../../utils/api';
+
+
+
+const copyToClipboard = (text) => {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text);
+  } else {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+    } catch (err) {}
+    document.body.removeChild(textArea);
+  }
+};
 
 function Avatar({ name }) {
-  const initials = name ? name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || '?' : '?';
-  const hue = (name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
+  const initial = (name || '?').charAt(0).toUpperCase();
   return (
-    <div
-      className="w-8 h-8 rounded-full flex items-center justify-center text-[.75rem] font-bold text-white flex-shrink-0"
-      style={{ background: `hsl(${hue}, 55%, 45%)` }}
-    >
-      {initials}
+    <div className="w-8 h-8 rounded bg-[var(--git-accent)]/20 text-[var(--git-accent)] flex items-center justify-center font-bold text-[14px] flex-shrink-0">
+      {initial}
     </div>
   );
 }
 
-/**
- * Modern clipboard helper that returns success status.
- */
-async function copyToClipboard(text) {
-  if (!text) return false;
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } else {
-      // Fallback for non-secure contexts if needed
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      textArea.style.top = "0";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      return successful;
-    }
-  } catch (err) {
-    console.error('[Clipboard] Copy failed:', err);
-    return false;
-  }
-}
-
-/**
- * Robustly parse unified diff into per-file chunks
- */
-function parseFilesFromDiff(diffStr) {
-  if (!diffStr) return [];
-  const files = [];
-  let current = null;
-
-  diffStr.replace(/\r\n/g, '\n').split('\n').forEach(line => {
-    if (line.startsWith('diff --git ')) {
-      if (current) { 
-        current.diff = current._lines.join('\n'); 
-        delete current._lines; 
-        files.push(current); 
-      }
-      
-      let filePath = '?';
-      // Format: "diff --git a/<path> b/<path>"
-      const match = line.match(/^diff --git a\/(.*?) b\/(.*)$/);
-      if (match) {
-        filePath = match[2].trim();
-        if (filePath.startsWith('"') && filePath.endsWith('"')) {
-          filePath = filePath.slice(1, -1);
-        }
-      }
-      
-      current = { 
-        filePath, 
-        status: 'M', 
-        adds: 0, 
-        dels: 0, 
-        _lines: [] 
-      };
-    } else if (current) {
-      if (line.startsWith('new file')) current.status = 'A';
-      else if (line.startsWith('deleted file')) current.status = 'D';
-      else if (line.startsWith('rename to')) current.status = 'R';
-      else if (line.startsWith('+') && !line.startsWith('+++')) current.adds++;
-      else if (line.startsWith('-') && !line.startsWith('---')) current.dels++;
-      current._lines.push(line);
-    }
-  });
-
-  if (current) { 
-    current.diff = current._lines.join('\n'); 
-    delete current._lines; 
-    files.push(current); 
-  }
-  return files;
-}
-
-/**
- * Highly optimized diff line row.
- * Memoized to prevent re-renders when the sidebar or parent scroll happens.
- */
-const DiffLine = memo(({ line, wrap }) => {
-  if (!line) return null;
-
-  const isAdd = line.startsWith('+') && !line.startsWith('+++');
-  const isDel = line.startsWith('-') && !line.startsWith('---');
-  const isHunk = line.startsWith('@@');
-  
-  return (
-    <div 
-      className={`flex min-w-0 transition-colors border-l-2 ${
-        isAdd ? 'bg-green-500/10 text-green-500 border-green-500' : 
-        isDel ? 'bg-red-500/10 text-red-500 border-red-500' : 
-        isHunk ? 'bg-[var(--accent)]/10 text-[var(--accent)] font-bold border-[var(--accent)]' : 
-        'text-[var(--text-secondary)] opacity-80 border-transparent'}`}
-    >
-      <span className="select-none w-9 text-center flex-shrink-0 opacity-40 mr-2 text-[10px] font-mono leading-[22px]">
-        {isAdd ? '+' : isDel ? '-' : ' '}
-      </span>
-      <span className={`flex-1 px-1 font-mono text-[11px] leading-[22px] ${wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'}`}>
-        {line.slice(1) || ' '}
-      </span>
-    </div>
-  );
-});
-
-/**
- * Viewer for a single file's diff lines.
- * Replaces react-window with a fast, stable standard list.
- */
-function FileDiffViewer({ diff, wrap }) {
-  const lines = useMemo(() => (diff || '').split('\n'), [diff]);
-
-  return (
-    <div className="flex flex-col">
-      {lines.map((l, i) => (
-        <DiffLine key={i} line={l} wrap={wrap} />
-      ))}
-    </div>
-  );
-}
-
-/**
- * Expandable row for a single file in the commit
- */
-function FileDiffRow({ file }) {
+function FileDiffRow({ file, commitHash, selectedProject }) {
+  const [diffData, setDiffData] = useState(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
   const [open, setOpen] = useState(false);
-  const [wrap, setWrap] = useState(true);
   
   const STATUS_CONFIG = { 
     M: 'bg-yellow-500/20 text-yellow-500', 
     A: 'bg-green-500/20 text-green-500', 
     D: 'bg-red-500/20 text-red-500', 
     R: 'bg-blue-500/20 text-blue-400' 
+  };
+
+  const handleExpand = async () => {
+    if (!open && !diffData && commitHash && selectedProject) {
+      setLoadingDiff(true);
+      try {
+        const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(file.filePath)}&oldPath=${encodeURIComponent(file.oldPath || file.filePath)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDiffData(data);
+        }
+      } catch (e) {
+        console.error('Failed to load file diff:', e);
+      } finally {
+        setLoadingDiff(false);
+      }
+    }
+    setOpen(v => !v);
   };
 
   const parts = file.filePath.replace(/\\/g, '/').split('/');
@@ -172,7 +73,7 @@ function FileDiffRow({ file }) {
       <button
         className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs transition-all
           ${open ? 'bg-[var(--bg-muted)]/40' : ''}`}
-        onClick={() => setOpen(v => !v)}
+        onClick={handleExpand}
       >
         <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded shadow-sm ${STATUS_CONFIG[file.status] || ''}`}>
           {file.status}
@@ -202,15 +103,19 @@ function FileDiffRow({ file }) {
             <div className="border-t border-border/40">
               <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-surface)]/10 border-b border-border/20">
                 <span className="text-[9px] text-[var(--text-secondary)] font-mono truncate opacity-60 tracking-wider uppercase">{file.filePath}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setWrap(v => !v); }}
-                  className="text-[9px] font-bold text-[var(--text-secondary)] hover:text-[var(--git-accent)] transition-colors flex items-center gap-1 uppercase tracking-tighter"
-                >
-                  {wrap ? 'Disable Wrap' : 'Enable Wrap'}
-                </button>
               </div>
-              <div className="overflow-auto max-h-[500px] scrollbar-none shadow-inner">
-                <FileDiffViewer diff={file.diff} wrap={wrap} />
+              <div className="overflow-hidden shadow-inner">
+                {loadingDiff ? (
+                  <div className="p-4 text-center text-xs text-[var(--text-secondary)] animate-pulse">Loading diff...</div>
+                ) : diffData ? (
+                  <MonacoDiffViewer
+                    original={diffData.originalContent || ''}
+                    modified={diffData.modifiedContent || ''}
+                    height="400px"
+                  />
+                ) : (
+                  <div className="p-4 text-center text-xs text-[var(--text-secondary)]">No diff available</div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -220,21 +125,19 @@ function FileDiffRow({ file }) {
   );
 }
 
-/**
- * Main Commit Detail Panel
- */
 export default function CommitDetail() {
   const [msgExpanded, setMsgExpanded] = useState(false);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const commitDiff = useGitStore(s => s.commitDiff);
   const graphLayout = useGitStore(s => s.graphLayout);
+  const selectedProject = useGitStore(s => s.selectedProject);
 
   const commitMeta = useMemo(
     () => graphLayout?.find(c => c.hash === selectedCommit) ?? null,
     [graphLayout, selectedCommit]
   );
 
-  const files = useMemo(() => parseFilesFromDiff(commitDiff), [commitDiff]);
+  const files = useMemo(() => commitDiff?.files || [], [commitDiff]);
 
   const { totalAdds, totalDels } = useMemo(() => ({
     totalAdds: files.reduce((a, f) => a + f.adds, 0),
@@ -324,7 +227,7 @@ export default function CommitDetail() {
         ) : (
           <div className="pb-12">
             {files.map(f => (
-              <FileDiffRow key={f.filePath} file={f} />
+              <FileDiffRow key={f.filePath} file={f} commitHash={selectedCommit} selectedProject={selectedProject} />
             ))}
           </div>
         )}

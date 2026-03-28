@@ -29,7 +29,7 @@ import { playNotificationSound } from '../utils/notificationSound';
 import { useMessages } from '../contexts/MessageContext';
 
 // Memoized message component to prevent unnecessary re-renders
-const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
+const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
   const isGrouped = prevMessage && prevMessage.type === message.type && 
                    prevMessage.type === 'assistant' && 
                    !prevMessage.isToolUse && !message.isToolUse;
@@ -1071,84 +1071,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
   const [geminiStatus, setGeminiStatus] = useState(null);
 
 
-  // Memoized diff calculation to prevent recalculating on every render
-  const createDiff = useMemo(() => {
-    const cache = new Map();
-    return (oldStr, newStr) => {
-      const key = `${oldStr.length}-${newStr.length}-${oldStr.slice(0, 50)}`;
-      if (cache.has(key)) {
-        return cache.get(key);
-      }
-      
-      const result = calculateDiff(oldStr, newStr);
-      cache.set(key, result);
-      if (cache.size > 100) {
-        const firstKey = cache.keys().next().value;
-        cache.delete(firstKey);
-      }
-      return result;
-    };
-  }, []);
-
-  // Load session messages from API
-  const loadSessionMessages = useCallback(async (projectName, sessionId) => {
-    if (!projectName || !sessionId) return [];
-    
-    setIsLoadingSessionMessages(true);
-    try {
-      const response = await api.sessionMessages(projectName, sessionId);
-      if (!response.ok) {
-        throw new Error('Failed to load session messages');
-      }
-      const data = await response.json();
-      return data.messages || [];
-    } catch (error) {
-      // console.error('Error loading session messages:', error);
-      return [];
-    } finally {
-      setIsLoadingSessionMessages(false);
-    }
-  }, []);
-
-  // Actual diff calculation function
-  const calculateDiff = (oldStr, newStr) => {
-    const oldLines = oldStr.split('\n');
-    const newLines = newStr.split('\n');
-    
-    // Simple diff algorithm - find common lines and differences
-    const diffLines = [];
-    let oldIndex = 0;
-    let newIndex = 0;
-    
-    while (oldIndex < oldLines.length || newIndex < newLines.length) {
-      const oldLine = oldLines[oldIndex];
-      const newLine = newLines[newIndex];
-      
-      if (oldIndex >= oldLines.length) {
-        // Only new lines remaining
-        diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
-        newIndex++;
-      } else if (newIndex >= newLines.length) {
-        // Only old lines remaining
-        diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
-        oldIndex++;
-      } else if (oldLine === newLine) {
-        // Lines are the same - skip in diff view (or show as context)
-        oldIndex++;
-        newIndex++;
-      } else {
-        // Lines are different
-        diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
-        diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
-        oldIndex++;
-        newIndex++;
-      }
-    }
-    
-    return diffLines;
-  };
-
-  const convertSessionMessages = (rawMessages) => {
+    const convertSessionMessages = (rawMessages) => {
     const converted = [];
     const toolResults = new Map(); // Map tool_use_id to tool result
     
@@ -2265,7 +2188,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
                   message={message}
                   index={index}
                   prevMessage={prevMessage}
-                  createDiff={createDiff}
+
                   onFileOpen={onFileOpen}
                   onShowSettings={onShowSettings}
                   autoExpandTools={autoExpandTools}

@@ -55,35 +55,6 @@ function Section({ title, icon, iconClass, count, children, defaultOpen = true, 
 }
 
 // Parse a unified diff string into per-file chunks
-function parseCommitDiffToFiles(diffStr) {
-  if (!diffStr) return [];
-  const chunks = [];
-  let current = null;
-  diffStr.split('\n').forEach(line => {
-    if (line.startsWith('diff --git ')) {
-      if (current) chunks.push(current);
-      // Extract filename robustly from "diff --git a\/.+ b\/.+" (handles greedy matches for " b/")
-      const match = line.match(/^diff --git a\/(.+) b\/(.+)$/);
-      let filePath;
-      if (match) {
-        filePath = match[2];
-      } else {
-        const idx = line.lastIndexOf(' b/');
-        filePath = idx >= 0 ? line.slice(idx + 3) : line.replace(/^diff --git /, '');
-      }
-      filePath = filePath.replace(/^["']|["']$/g, '').trim(); 
-      current = { filePath, status: 'M', lines: [] };
-    } else if (current) {
-      if (line.startsWith('new file')) current.status = 'A';
-      else if (line.startsWith('deleted file')) current.status = 'D';
-      else if (line.startsWith('rename to')) current.status = 'R';
-      current.lines.push(line);
-    }
-  });
-  if (current) chunks.push(current);
-  return chunks.map(c => ({ ...c, diff: c.lines.join('\n') }));
-}
-
 export default function FileTree() {
   const gitStatus = useGitStore(s => s.gitStatus);
   const selectedCommit = useGitStore(s => s.selectedCommit);
@@ -93,7 +64,7 @@ export default function FileTree() {
   // ── Hooks must be at the top level, unconditional ────────────────────────
   const commitFiles = useMemo(() => {
     if (!selectedCommit) return [];
-    return parseCommitDiffToFiles(commitDiff);
+    return commitDiff?.files || [];
   }, [selectedCommit, commitDiff]);
 
   const stagedFiles = useMemo(() => {
@@ -170,9 +141,10 @@ export default function FileTree() {
             <FileRow
               key={f.filePath}
               filePath={f.filePath}
+              oldPath={f.oldPath}
               status={f.status}
               mode="commit-view"
-              commitDiffChunk={f.diff}
+              commitHash={selectedCommit}
               isFocused={focusedIndex === i}
             />
           ))}
