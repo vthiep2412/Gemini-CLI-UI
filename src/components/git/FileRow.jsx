@@ -4,7 +4,7 @@
  * commit-view mode (read-only, with expandable inline diff).
  */
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Check, Trash2, AlignLeft, ArrowLeftRight } from 'lucide-react';
+import { ChevronRight, ChevronDown, Check, Trash2, AlignLeft, ArrowLeftRight, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -53,7 +53,7 @@ function DiffViewer({ diff, wrapText }) {
   );
 }
 
-export default function FileRow({ filePath, status, mode = 'changes', commitDiffChunk, isFocused }) {
+export default function FileRow({ filePath, status, mode = 'changes', section, commitDiffChunk, isFocused }) {
   const [expanded, setExpanded] = useState(false);
   const [wrapText, setWrapText] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -76,11 +76,13 @@ export default function FileRow({ filePath, status, mode = 'changes', commitDiff
     }
   }, [confirming]);
 
-  const { gitDiff, discardFile, fetchFileDiff } = useGitStore(
+  const { gitDiff, discardFile, fetchFileDiff, stageFiles, unstageFiles } = useGitStore(
     useShallow(state => ({
       gitDiff: state.gitDiff,
       discardFile: state.discardFile,
       fetchFileDiff: state.fetchFileDiff,
+      stageFiles: state.stageFiles,
+      unstageFiles: state.unstageFiles,
     }))
   );
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['U'];
@@ -141,17 +143,43 @@ export default function FileRow({ filePath, status, mode = 'changes', commitDiff
               </button>
             </Tooltip>
           )}
-          {(mode === 'changes') && (status === 'M' || status === 'D' || status === 'U') && (
-            <Tooltip label={confirming ? (status === 'U' ? 'Permanently delete untracked file — click again to confirm' : 'Click again to confirm discard') : 'Discard changes'}>
-              <button
-                aria-label={confirming ? 'Confirm discard' : 'Discard changes'}
-                onClick={handleDiscard}
-                onBlur={() => setConfirming(false)}
-                className={`p-1 rounded transition-all ${confirming ? 'bg-rose-500 text-white' : 'text-[var(--text-secondary)] hover:bg-rose-500/10 hover:text-rose-400'}`}
-              >
-                {confirming ? <Check className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
-              </button>
-            </Tooltip>
+          {(mode === 'changes') && (
+            <>
+              {(status === 'M' || status === 'D' || status === 'U') && section !== 'staged' && (
+                <Tooltip label={confirming ? (status === 'U' ? 'Permanently delete untracked file — click again to confirm' : 'Click again to confirm discard') : 'Discard changes'}>
+                  <button
+                    aria-label={confirming ? 'Confirm discard' : 'Discard changes'}
+                    onClick={handleDiscard}
+                    onBlur={() => setConfirming(false)}
+                    className={`p-1 rounded transition-all ${confirming ? 'bg-rose-500 text-white' : 'text-[var(--text-secondary)] hover:bg-rose-500/10 hover:text-rose-400'}`}
+                  >
+                    {confirming ? <Check className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+                  </button>
+                </Tooltip>
+              )}
+              {section === 'unstaged' && (
+                <Tooltip label="Stage">
+                  <button
+                    aria-label="Stage file"
+                    onClick={(e) => { e.stopPropagation(); stageFiles([filePath]); }}
+                    className="p-1 rounded transition-all text-emerald-400 hover:bg-emerald-500/20"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+              {section === 'staged' && (
+                <Tooltip label="Unstage">
+                  <button
+                    aria-label="Unstage file"
+                    onClick={(e) => { e.stopPropagation(); unstageFiles([filePath]); }}
+                    className="p-1 rounded transition-all text-orange-400 hover:bg-orange-500/20"
+                  >
+                    <Minus className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+              )}
+            </>
           )}
         </div>
 

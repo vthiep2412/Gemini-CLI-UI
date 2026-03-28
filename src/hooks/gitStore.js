@@ -10,6 +10,7 @@
  */
 import { create } from 'zustand';
 import { authenticatedFetch } from '../utils/api';
+import { toast } from 'sonner';
 
 export const useGitStore = create((set, get) => ({
   // ── State slices ────────────────────────────────────────────────────────────
@@ -287,9 +288,60 @@ export const useGitStore = create((set, get) => ({
     finally { setLoading('committing', false); }
   },
 
-  generateCommitMessage: async () => {
-    const { selectedProject, gitStatus, setLoading } = get();
-    const files = gitStatus?.files?.map(f => f.path) || [];
+  getQuickCommitMessage: () => {
+    const { gitStatus } = get();
+    if (!gitStatus?.files?.length) return '';
+    
+    const hasStaged = gitStatus.files.some(f => f.isStaged);
+    const filesToCommit = hasStaged 
+      ? gitStatus.files.filter(f => f.isStaged)
+      : gitStatus.files;
+
+    const added = filesToCommit.filter(f => f.status.includes('A') || f.status === '??' || f.status === 'U');
+    const deleted = filesToCommit.filter(f => f.status.includes('D'));
+    const changed = filesToCommit.filter(f => !f.status.includes('A') && f.status !== '??' && f.status !== 'U' && !f.status.includes('D'));
+
+    let summaryParts = [];
+    if (changed.length) summaryParts.push(`Changed something in ${changed.length} file${changed.length > 1 ? 's' : ''}`);
+    if (added.length) summaryParts.push(`add ${added.length} file${added.length > 1 ? 's' : ''}`);
+    if (deleted.length) summaryParts.push(`delete ${deleted.length} file${deleted.length > 1 ? 's' : ''}`);
+
+    if (summaryParts.length === 0) summaryParts.push(`update ${filesToCommit.length} files`);
+    
+    if (summaryParts.length > 0) {
+      summaryParts[0] = summaryParts[0].charAt(0).toUpperCase() + summaryParts[0].slice(1);
+    }
+    
+    const title = `feat: ${summaryParts.join(', and ')}.`;
+
+    let body = [];
+    if (changed.length) {
+      body.push(`\nChanged File${changed.length > 1 ? 's' : ''}:`);
+      changed.forEach(f => body.push(f.path));
+    }
+    if (added.length) {
+      body.push(`\nAdded File${added.length > 1 ? 's' : ''}:`);
+      added.forEach(f => body.push(f.path));
+    }
+    if (deleted.length) {
+      body.push(`\nDeleted File${deleted.length > 1 ? 's' : ''}:`);
+      deleted.forEach(f => body.push(f.path));
+    }
+
+    return `${title}\n${body.join('\n')}`.trim();
+  },
+
+  generateQuickCommitMessage: () => {
+    const msg = get().getQuickCommitMessage();
+    if (msg) set({ commitMessage: msg });
+  },
+
+  generateAICommitMessage: async () => {
+    const { selectedProject, gitStatus, setLoading, setError } = get();
+    const hasStaged = gitStatus?.files?.some(f => f.isStaged);
+    const files = hasStaged 
+      ? gitStatus.files.filter(f => f.isStaged).map(f => f.path)
+      : gitStatus?.files?.map(f => f.path) || [];
     if (!selectedProject || files.length === 0) return;
     setLoading('generatingMessage', true);
     try {
@@ -298,11 +350,20 @@ export const useGitStore = create((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project: selectedProject.name, files })
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}: ${res.statusText}`;
+        try {
+          const errData = await res.json();
+          if (errData.error) errMsg = errData.error;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
       const data = await res.json();
       if (data.message) set({ commitMessage: data.message });
     } catch (e) {
       setError('generateMessage', e.message);
+      console.error('AI Commit Generation Error:', e);
+      toast.error('AI commit generation failed (see console)');
     }
     finally { setLoading('generatingMessage', false); }
   },
@@ -469,27 +530,31 @@ export const useGitStore = create((set, get) => ({
 
   // ── Unified Sync & Commit ──────────────────────────────────────────────
   syncAndCommit: async () => {
-    const { selectedProject, commitMessage, gitStatus, setLoading, fetchStatus, fetchRemoteStatus, fetchGraph } = get();
-    if (!selectedProject || !commitMessage.trim() || !gitStatus?.files?.length) return false;
+    let { selectedProject, commitMessage, gitStatus, setLoading, fetchStatus, fetchRemoteStatus, fetchGraph } = get();
+    if (!selectedProject || !gitStatus?.files?.length) return false;
+    
+    // Auto-generate quick message if empty
+    if (!commitMessage || !commitMessage.trim()) {
+      commitMessage = get().getQuickCommitMessage();
+      set({ commitMessage });
+    }
     
     setLoading('committing', true);
     try {
-      // 1. Stage all remaining modified files
+      // 1. Determine staging strategy
+      const hasStaged = gitStatus.files.some(f => f.isStaged);
       const allFilePaths = gitStatus.files.map(f => f.path);
-      const stageRes = await authenticatedFetch('/api/git/stage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: selectedProject.name, files: allFilePaths })
-      });
-      if (!stageRes.ok) throw new Error('Failed to stage files');
-      const stageData = await stageRes.json();
-      if (stageData.error) throw new Error(stageData.error);
+      
+      // If there are staged files, we DO NOT send files to /api/git/commit,
+      // as providing files there triggers a forced `git add`. We want to simply commit the index.
+      // If no staged files exist, we supply allFilePaths to auto-stage them before commit.
+      const filesToCommit = hasStaged ? [] : allFilePaths;
 
       // 2. Commit
       const commitRes = await authenticatedFetch('/api/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: selectedProject.name, message: commitMessage, files: allFilePaths })
+        body: JSON.stringify({ project: selectedProject.name, message: commitMessage, files: filesToCommit })
       });
       if (!commitRes.ok) throw new Error('Commit request failed');
       const commitData = await commitRes.json();

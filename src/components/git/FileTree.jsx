@@ -96,12 +96,20 @@ export default function FileTree() {
     return parseCommitDiffToFiles(commitDiff);
   }, [selectedCommit, commitDiff]);
 
-  const allFiles = useMemo(() => {
+  const stagedFiles = useMemo(() => {
     if (selectedCommit) return [];
-    return gitStatus?.files || [];
+    return gitStatus?.files?.filter(f => f.isStaged) || [];
   }, [selectedCommit, gitStatus]);
 
-  const filesToRender = selectedCommit ? commitFiles : allFiles;
+  const unstagedFiles = useMemo(() => {
+    if (selectedCommit) return [];
+    return gitStatus?.files?.filter(f => f.isUnstaged) || [];
+  }, [selectedCommit, gitStatus]);
+
+  const filesToRender = useMemo(() => {
+    if (selectedCommit) return commitFiles;
+    return [...stagedFiles, ...unstagedFiles];
+  }, [selectedCommit, commitFiles, stagedFiles, unstagedFiles]);
 
   // Clamp focusedIndex when filesToRender changes
   useEffect(() => {
@@ -188,7 +196,7 @@ export default function FileTree() {
     );
   }
 
-  if (allFiles.length === 0) {
+  if (!selectedCommit && filesToRender.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-[var(--bg-base)]">
         <div className="text-3xl mb-3 opacity-30 text-green-500">✓</div>
@@ -200,22 +208,39 @@ export default function FileTree() {
 
   return (
     <div 
-      className="flex-1 overflow-y-auto min-h-0 py-1 bg-[var(--bg-surface)] scrollbar-none pb-48 outline-none"
+      className="flex-1 overflow-y-auto min-h-0 py-1 bg-[var(--bg-surface)] scrollbar-none outline-none"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
       <Section
-        title="Working Tree Changes"
-        count={allFiles.length}
+        title="Staged Changes"
+        count={stagedFiles.length}
         defaultOpen
       >
-        {allFiles.map((f, i) => (
+        {stagedFiles.map((f, i) => (
           <FileRow 
-            key={f.path} 
+            key={`staged-${f.path}`} 
             filePath={f.path} 
             status={f.status?.trim() ?? ''}
-            mode="changes" 
+            mode="changes"
+            section="staged"
             isFocused={focusedIndex === i}
+          />
+        ))}
+      </Section>
+      <Section
+        title="Unstaged Changes"
+        count={unstagedFiles.length}
+        defaultOpen
+      >
+        {unstagedFiles.map((f, i) => (
+          <FileRow 
+            key={`unstaged-${f.path}`} 
+            filePath={f.path} 
+            status={f.status?.trim() ?? ''}
+            mode="changes"
+            section="unstaged"
+            isFocused={focusedIndex === i + stagedFiles.length}
           />
         ))}
       </Section>

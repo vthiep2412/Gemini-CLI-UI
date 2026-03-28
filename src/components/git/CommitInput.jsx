@@ -3,40 +3,54 @@
  * Textarea for commit message + AI generate + Commit / Commit & Push buttons.
  */
 import React, { useRef, useEffect } from 'react';
-import { Sparkles, Upload, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, Upload, Loader2 } from 'lucide-react';
 import Tooltip from '../common/Tooltip';
 import { useGitStore } from '../../hooks/gitStore';
+import { toast } from 'sonner';
 
 export default function CommitInput() {
   const commitMessage = useGitStore(s => s.commitMessage);
   const setCommitMessage = useGitStore(s => s.setCommitMessage);
   const syncAndCommit = useGitStore(s => s.syncAndCommit);
-  const generateCommitMessage = useGitStore(s => s.generateCommitMessage);
+  const generateQuickCommitMessage = useGitStore(s => s.generateQuickCommitMessage);
+  const getQuickCommitMessage = useGitStore(s => s.getQuickCommitMessage);
+  const generateAICommitMessage = useGitStore(s => s.generateAICommitMessage);
   const gitStatus = useGitStore(s => s.gitStatus);
   const loadingState = useGitStore(s => s.loadingState);
 
   const textareaRef = useRef(null);
   const changeCount = gitStatus?.files?.length || 0;
 
-  // Auto-resize textarea
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-  }, [commitMessage]);
 
   const handleSyncAndCommit = async () => {
+    if (changeCount === 0) return;
+
+    // Validation: Auto-generate quick message if currently empty
+    if (!commitMessage || !commitMessage.trim()) {
+      const fallbackMsg = getQuickCommitMessage();
+      if (!fallbackMsg || !fallbackMsg.trim()) {
+        toast.error('Please enter a commit message');
+        textareaRef.current?.focus();
+        return;
+      }
+      setCommitMessage(fallbackMsg);
+    }
+
     try {
-      await syncAndCommit();
+      const result = await syncAndCommit();
+      if (result && result.success) {
+        toast.success(result.warning || 'Changes committed and synchronized');
+      } else if (result === false) {
+        // User is notified via store error usually, but let's be safe
+        toast.error('Commit failed. Check for conflicts or unstaged changes.');
+      }
     } catch (error) {
       console.error('Sync and commit failed:', error);
-      // TODO: Add toast sonner
-      // For all purpose toast, and in this case notify error.
+      toast.error(error.message || 'Operation failed');
     }
   };
 
-  const canCommit = commitMessage.trim().length > 0 && changeCount > 0;
+  const canCommit = changeCount > 0;
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -48,7 +62,7 @@ export default function CommitInput() {
   };
 
   return (
-    <div className="bg-transparent p-2.5 flex-shrink-0 transition-colors">
+    <div className="bg-transparent flex-1 min-h-0 p-2.5 transition-colors flex flex-col">
       {/* Staged file count hint */}
       <div className="flex items-center justify-between mb-2 px-0.5">
         <span className="text-[10px] text-[var(--text-secondary)] font-bold tracking-tight uppercase opacity-80">
@@ -56,33 +70,46 @@ export default function CommitInput() {
             ? `${changeCount} file${changeCount !== 1 ? 's' : ''} to sync`
             : 'No changes to sync'}
         </span>
-        {/* AI generate button */}
-        <Tooltip label="Generate commit message with AI">
-          <button
-            onClick={generateCommitMessage}
-            disabled={(loadingState?.generatingMessage ?? false) || changeCount === 0}
-            className="p-1.5 rounded-md hover:bg-[var(--bg-muted)] text-[var(--git-accent)] transition-all disabled:opacity-50"
-          >
-            {loadingState?.generatingMessage
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Sparkles className="w-4 h-4" />}
-          </button>
-        </Tooltip>
+        {/* Action buttons group */}
+        <div className="flex items-center gap-1">
+          <Tooltip label="Generate Commit Message With AI">
+            <button
+              onClick={generateAICommitMessage}
+              disabled={(loadingState?.generatingMessage ?? false) || changeCount === 0}
+              className="p-1.5 rounded-md hover:bg-[var(--bg-muted)] text-[var(--git-accent)] transition-all disabled:opacity-50"
+            >
+              {loadingState?.generatingMessage
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Sparkles className="w-4 h-4" />}
+            </button>
+          </Tooltip>
+          {/* Quick generate button */}
+          <Tooltip label="Quick Commit Message">
+            <button
+              onClick={generateQuickCommitMessage}
+              disabled={changeCount === 0 || (loadingState?.generatingMessage ?? false)}
+              className="p-1.5 rounded-md hover:bg-[var(--bg-muted)] text-emerald-400 transition-all disabled:opacity-50"
+            >
+              <Zap className="w-4 h-4" />
+            </button>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Message textarea */}
-      <div className="relative group">
+      <div className="relative group flex-1 flex flex-col min-h-0">
         <textarea
           ref={textareaRef}
           value={commitMessage}
           onChange={e => setCommitMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Commit message (Ctrl/⌘ + Enter to commit)"
+          placeholder={getQuickCommitMessage() || 'Commit message'}
+
           aria-label="Commit message"
           rows={2}
-          className="w-full bg-[var(--bg-surface)] rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/40
-            font-sans resize-none outline-none focus:bg-[var(--bg-muted)] transition-all leading-relaxed
-            min-h-[60px] max-h-[120px] overflow-y-auto custom-scrollbar shadow-sm"
+          className="w-full bg-white/10 border border-white/5 rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/40
+            font-sans resize-none outline-none focus:bg-white/20 focus:border-[var(--git-accent)]/30 transition-all leading-relaxed
+            flex-1 min-h-[60px] overflow-y-auto custom-scrollbar shadow-sm"
         />
       </div>
 

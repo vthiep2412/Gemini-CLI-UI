@@ -1,5 +1,5 @@
 import express from 'express';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
@@ -168,8 +168,8 @@ router.get('/diff', async (req, res) => {
 router.post('/commit', async (req, res) => {
   const { project, message, files } = req.body;
   
-  if (!project || !message || !files || files.length === 0) {
-    return res.status(400).json({ error: 'Project name, commit message, and files are required' });
+  if (!project || !message) {
+    return res.status(400).json({ error: 'Project name and commit message are required' });
   }
 
   try {
@@ -178,13 +178,15 @@ router.post('/commit', async (req, res) => {
     // Validate git repository
     await validateGitRepository(projectPath);
     
-    // Stage selected files
-    for (const file of files) {
-      const resolvedPath = path.resolve(projectPath, file);
-      if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
-        return res.status(400).json({ error: `Invalid file path: ${file}` });
+    // Stage explicitly requested files, if any are provided
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const resolvedPath = path.resolve(projectPath, file);
+        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+          return res.status(400).json({ error: `Invalid file path: ${file}` });
+        }
+        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
       }
-      await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
     }
     
     // Check if there are any staged changes to commit
@@ -387,27 +389,57 @@ router.post('/generate-commit-message', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
+    const geminiPathString = (process.env.GEMINI_PATH || 'gemini').trim().replace(/^"|"$/g, '');
+    const instruction = "Write a deep context commit message in the format of conventional commits using the provided git diff payload. Return ONLY the commit message without Markdown or preambles:";
     
-    // Get diff for selected files
-    let combinedDiff = '';
-    for (const file of files) {
-      try {
-        const { stdout } = await execFileAsync(
-          'git',
-          ['diff', 'HEAD', '--', file],
-          { cwd: projectPath }
-        );
-        if (stdout) {
-          combinedDiff += `\n--- ${file} ---\n${stdout}`;
-        }
-      } catch (error) {
-        // console.error(`Error getting diff for ${file}:`, error);
-      }
+    // Construct the file arguments for git diff
+    // We skip lockfiles here too to preserve speed
+    const filterFiles = files.filter(f => !f.match(/(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i));
+    if (filterFiles.length === 0) {
+      return res.status(400).json({ error: 'At least one eligible file is required (lockfiles are excluded)' });
     }
+
+    console.log(`\n[Git API] Executing Secure Pipeline (spawn/pipe)`);
+    console.log(`[Git API] Gemini Path: ${geminiPathString}`);
+    console.log(`[Git API] Project Path: ${projectPath}`);
     
-    // Use AI to generate commit message (simple implementation)
-    // In a real implementation, you might want to use GPT or Claude API
-    const message = generateSimpleCommitMessage(files, combinedDiff);
+    let stdout = '';
+    let stderr = '';
+
+    const spawnOptions = { cwd: projectPath, shell: true };
+    const gitProcess = spawn('git', ['diff', '--', ...filterFiles], spawnOptions);
+    const geminiProcess = spawn(geminiPathString, ['-m', `gemini-2.5-flash-lite`, '-p', `"${instruction}"`], spawnOptions); // STRING ESCAPE ISSUE PLS ENSURE IT MUST BE WRAP AROUND ' or " FOR ONLY STRING ARG
+
+    gitProcess.stdout.pipe(geminiProcess.stdin);
+    
+    geminiProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    geminiProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    await new Promise((resolve, reject) => {
+      gitProcess.on('error', (err) => {
+        reject(new Error(`Failed to start git: ${err.message}`));
+      });
+
+      geminiProcess.on('error', (err) => {
+        reject(new Error(`Failed to start AI generator: ${err.message}`));
+      });
+
+      geminiProcess.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(stderr.trim() || `Gemini process exited with code ${code}`));
+      });
+    });
+
+    console.log(`[Git API stdout]: ${stdout.trim()}`);
+    if (stderr) console.error(`[Git API stderr]: ${stderr}`);
+
+    // Strip out CLI credential caching notifications so they don't pollute the commit
+    const message = stdout.replace(/^Loaded cached credentials\.\s*/mi, '').trim();
     
     res.json({ message });
   } catch (error) {
@@ -415,46 +447,6 @@ router.post('/generate-commit-message', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-// Simple commit message generator (can be replaced with AI)
-function generateSimpleCommitMessage(files, diff) {
-  const fileCount = files.length;
-  const isMultipleFiles = fileCount > 1;
-  
-  // Analyze the diff to determine the type of change
-  const additions = (diff.match(/^\+[^+]/gm) || []).length;
-  const deletions = (diff.match(/^-[^-]/gm) || []).length;
-  
-  // Determine the primary action
-  let action = 'Update';
-  if (additions > 0 && deletions === 0) {
-    action = 'Add';
-  } else if (deletions > 0 && additions === 0) {
-    action = 'Remove';
-  } else if (additions > deletions * 2) {
-    action = 'Enhance';
-  } else if (deletions > additions * 2) {
-    action = 'Refactor';
-  }
-  
-  // Generate message based on files
-  if (isMultipleFiles) {
-    const components = new Set(files.map(f => {
-      const parts = f.split('/');
-      return parts[parts.length - 2] || parts[0];
-    }));
-    
-    if (components.size === 1) {
-      return `${action} ${[...components][0]} component`;
-    } else {
-      return `${action} multiple components`;
-    }
-  } else {
-    const fileName = files[0].split('/').pop();
-    const componentName = fileName.replace(/\.(jsx?|tsx?|css|scss)$/, '');
-    return `${action} ${componentName}`;
-  }
-}
 
 // Get remote status (ahead/behind commits with smart remote detection)
 router.get('/remote-status', async (req, res) => {
