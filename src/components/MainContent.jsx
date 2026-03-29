@@ -152,7 +152,7 @@ function MainContent({
           />
         </div>
 
-        <div className={`h-full overflow-hidden ${activeTab === 'ide' ? 'block' : 'hidden'}`} data-panel="ide">
+        <div className={`h-full flex flex-col overflow-hidden ${activeTab === 'ide' ? 'block' : 'hidden'}`} data-panel="ide">
           <FileTree selectedProject={selectedProject} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'shell' ? 'block' : 'hidden'}`}>

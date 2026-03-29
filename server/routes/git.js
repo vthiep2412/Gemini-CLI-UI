@@ -179,7 +179,7 @@ router.post('/commit', async (req, res) => {
     await validateGitRepository(projectPath);
     
     // Stage explicitly requested files, if any are provided
-    if (files && files.length > 0) {
+    if (files && Array.isArray(files) && files.length > 0) {
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
@@ -399,9 +399,9 @@ router.post('/generate-commit-message', async (req, res) => {
       return res.status(400).json({ error: 'At least one eligible file is required (lockfiles are excluded)' });
     }
 
-    console.log(`\n[Git API] Executing Secure Pipeline (spawn/pipe)`);
-    console.log(`[Git API] Gemini Path: ${geminiPathString}`);
-    console.log(`[Git API] Project Path: ${projectPath}`);
+    // console.log(`\n[Git API] Executing Secure Pipeline (spawn/pipe)`);
+    // console.log(`[Git API] Gemini Path: ${geminiPathString}`);
+    // console.log(`[Git API] Project Path: ${projectPath}`);
     
     let stdout = '';
     let stderr = '';

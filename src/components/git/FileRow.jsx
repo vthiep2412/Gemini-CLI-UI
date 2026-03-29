@@ -25,7 +25,7 @@ function DiffViewer({ diff, wrapText }) {
 
   const lines = diff.split('\n');
   return (
-    <div className="overflow-auto max-h-96 text-[10px] font-mono leading-relaxed pb-12">
+    <div className="text-[10px] font-mono leading-relaxed pb-12">
       {lines.map((line, i) => {
         const isAdd = line.startsWith('+') && !line.startsWith('+++');
         const isDel = line.startsWith('-') && !line.startsWith('---');

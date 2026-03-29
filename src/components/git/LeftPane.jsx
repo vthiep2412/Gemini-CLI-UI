@@ -67,7 +67,7 @@ export default function LeftPane() {
           <CommitDetail />
         ) : (
           <>
-            <div className="flex-1 overflow-hidden" style={{ paddingBottom: commitHeight }}>
+            <div className="flex-1 flex flex-col overflow-hidden" style={{ paddingBottom: commitHeight }}>
               <FileTree />
             </div>
             <div 

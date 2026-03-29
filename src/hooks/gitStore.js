@@ -302,7 +302,7 @@ export const useGitStore = create((set, get) => ({
     const changed = filesToCommit.filter(f => !f.status.includes('A') && f.status !== '??' && f.status !== 'U' && !f.status.includes('D'));
 
     let summaryParts = [];
-    if (changed.length) summaryParts.push(`Changed something in ${changed.length} file${changed.length > 1 ? 's' : ''}`);
+    if (changed.length) summaryParts.push(`Changed ${changed.length} file${changed.length > 1 ? 's' : ''}`);
     if (added.length) summaryParts.push(`add ${added.length} file${added.length > 1 ? 's' : ''}`);
     if (deleted.length) summaryParts.push(`delete ${deleted.length} file${deleted.length > 1 ? 's' : ''}`);
 

@@ -143,7 +143,7 @@ export default function FileTree() {
   if (selectedCommit) {
     return (
       <div 
-        className="flex-1 overflow-y-auto min-h-0 bg-[var(--bg-base)] custom-scrollbar outline-none"
+        className="flex-1 overflow-y-auto min-h-0 bg-[var(--bg-base)] scrollbar-none outline-none"
         onKeyDown={handleKeyDown}
         tabIndex={0}
       >
@@ -196,7 +196,7 @@ export default function FileTree() {
     );
   }
 
-  if (!selectedCommit && filesToRender.length === 0) {
+  if (filesToRender.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-[var(--bg-base)]">
         <div className="text-3xl mb-3 opacity-30 text-green-500">✓</div>
@@ -208,7 +208,7 @@ export default function FileTree() {
 
   return (
     <div 
-      className="flex-1 overflow-y-auto min-h-0 py-1 bg-[var(--bg-surface)] scrollbar-none outline-none"
+      className="flex-1 overflow-y-auto min-h-0 pt-1 bg-[var(--bg-surface)] scrollbar-none outline-none"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
