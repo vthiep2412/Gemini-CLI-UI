@@ -24,12 +24,14 @@ const STATUS_CONFIG = {
 
 
 
-export default function FileRow({ filePath, status, mode = 'changes', section, commitDiffChunk, isFocused, commitHash, oldPath }) {
+export default function FileRow({ filePath, status, mode = 'changes', section, isFocused, commitHash, oldPath }) {
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const confirmTimeoutRef = React.useRef(null);
   const rowRef = React.useRef(null);
-  const [commitFileDiff, setCommitFileDiff] = useState(commitDiffChunk);
+  const [commitFileDiff, setCommitFileDiff] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState(null);
   const selectedProject = useGitStore(state => state.selectedProject);
 
   useEffect(() => {
@@ -63,14 +65,21 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
   const handleExpand = async () => {
     if (!expanded) {
       if (mode === 'commit-view' && !commitFileDiff && commitHash && selectedProject) {
+        setDiffLoading(true);
+        setDiffError(null);
         try {
           const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(filePath)}&oldPath=${encodeURIComponent(oldPath || filePath)}`);
           if (res.ok) {
             const data = await res.json();
             setCommitFileDiff({ original: data.originalContent, modified: data.modifiedContent });
+          } else {
+             setDiffError('Failed to load diff');
           }
         } catch (e) {
           console.error('Failed to load file diff:', e);
+          setDiffError('Error loading diff');
+        } finally {
+          setDiffLoading(false);
         }
       } else if (!diff && mode !== 'commit-view') {
         fetchFileDiff(filePath);
@@ -179,14 +188,18 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
                 <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate opacity-60">{filePath}</span>
               </div>
               <div className="overflow-hidden">
-                {!diff ? (
+                {diffLoading || (!diff && mode !== 'commit-view') ? (
                   <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>
-                ) : (
+                ) : diffError ? (
+                  <div className="p-3 text-[10px] text-red-500 font-mono">{diffError}</div>
+                ) : diff ? (
                   <MonacoDiffViewer
                     original={diff.original || ''}
                     modified={diff.modified || ''}
                     height="300px"
                   />
+                ) : (
+                   <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono">No diff available</div>
                 )}
               </div>
             </div>

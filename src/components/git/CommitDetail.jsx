@@ -47,6 +47,7 @@ function Avatar({ name }) {
 function FileDiffRow({ file, commitHash, selectedProject }) {
   const [diffData, setDiffData] = useState(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
+  const [diffError, setDiffError] = useState(null);
   const [open, setOpen] = useState(false);
   
   const STATUS_CONFIG = { 
@@ -59,14 +60,18 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
   const handleExpand = async () => {
     if (!open && !diffData && commitHash && selectedProject) {
       setLoadingDiff(true);
+      setDiffError(null);
       try {
         const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(file.filePath)}&oldPath=${encodeURIComponent(file.oldPath || file.filePath)}`);
         if (res.ok) {
           const data = await res.json();
           setDiffData(data);
+        } else {
+          setDiffError('Failed to load diff');
         }
       } catch (e) {
         console.error('Failed to load file diff:', e);
+        setDiffError('Error loading diff');
       } finally {
         setLoadingDiff(false);
       }
@@ -117,6 +122,8 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
               <div className="overflow-hidden shadow-inner">
                 {loadingDiff ? (
                   <div className="p-4 text-center text-xs text-[var(--text-secondary)] animate-pulse">Loading diff...</div>
+                ) : diffError ? (
+                  <div className="p-4 text-center text-xs text-red-500 font-mono">{diffError}</div>
                 ) : diffData ? (
                   <MonacoDiffViewer
                     original={diffData.originalContent || ''}
