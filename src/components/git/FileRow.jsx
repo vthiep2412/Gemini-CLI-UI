@@ -26,7 +26,6 @@ const STATUS_CONFIG = {
 
 export default function FileRow({ filePath, status, mode = 'changes', section, commitDiffChunk, isFocused, commitHash, oldPath }) {
   const [expanded, setExpanded] = useState(false);
-  const [wrapText, setWrapText] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const confirmTimeoutRef = React.useRef(null);
   const rowRef = React.useRef(null);

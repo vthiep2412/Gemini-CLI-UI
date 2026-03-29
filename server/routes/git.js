@@ -131,6 +131,12 @@ router.get('/diff', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+
     // Validate git repository
     await validateGitRepository(projectPath);
     
@@ -317,6 +323,50 @@ router.get('/commits', async (req, res) => {
 });
 
 // Get diff for a specific commit
+
+router.post('/commit', async (req, res) => {
+  const { project, message, files } = req.body;
+
+  if (!project || !message) {
+    return res.status(400).json({ error: 'Project name and commit message are required' });
+  }
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+
+    // Validate git repository
+    await validateGitRepository(projectPath);
+
+    // Stage explicitly requested files, if any are provided
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const resolvedPath = path.resolve(projectPath, file);
+        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+          return res.status(400).json({ error: `Invalid file path: ${file}` });
+        }
+        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+      }
+    }
+
+    // Check if there are any staged changes to commit
+    try {
+      await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
+      // If success (exit code 0), no changes are staged
+      return res.status(400).json({ error: 'No staged changes to commit' });
+    } catch (e) {
+      // Exit code 1 means there are staged changes, which is what we want
+    }
+
+    // Commit with message
+    const { stdout } = await execFileAsync('git', ['commit', '-m', message], { cwd: projectPath });
+
+    res.json({ success: true, output: stdout });
+  } catch (error) {
+    // console.error('Git commit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/commit-diff', async (req, res) => {
   const { project, commit } = req.query;
   
@@ -397,6 +447,19 @@ router.get('/commit-file-diff', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
+
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+    if (oldPath) {
+      const resolvedOldPath = path.resolve(projectPath, oldPath);
+      if (!resolvedOldPath.startsWith(path.resolve(projectPath) + path.sep)) {
+        return res.status(400).json({ error: `Invalid old file path: ${oldPath}` });
+      }
+    }
+
 
     let originalContent = '';
     let modifiedContent = '';

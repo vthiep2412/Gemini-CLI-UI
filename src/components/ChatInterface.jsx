@@ -1225,7 +1225,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
             
             setIsLoadingSessionMessages(true);
             try {
-              const messages = await loadSessionMessages(selectedProject.name, selectedSession.id);
+              const messages = await fetchSessionMessages(selectedProject.name, selectedSession.id);
               setSessionMessages(messages);
               if (autoScrollToBottom) {
                 setTimeout(() => scrollToBottom(), 200);
@@ -1249,7 +1249,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
     };
     
     loadMessages();
-  }, [selectedSession?.id, selectedProject?.name, loadSessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
+  }, [selectedSession?.id, selectedProject?.name, fetchSessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {

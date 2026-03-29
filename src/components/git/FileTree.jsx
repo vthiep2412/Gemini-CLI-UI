@@ -139,7 +139,7 @@ export default function FileTree() {
         <div className="">
           {commitFiles.map((f, i) => (
             <FileRow
-              key={f.filePath}
+              key={`${selectedCommit}-${f.filePath}`}
               filePath={f.filePath}
               oldPath={f.oldPath}
               status={f.status}

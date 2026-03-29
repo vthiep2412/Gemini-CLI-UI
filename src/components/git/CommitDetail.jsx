@@ -10,20 +10,30 @@ import { authenticatedFetch } from '../../utils/api';
 
 
 
-const copyToClipboard = (text) => {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text);
-  } else {
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-    } catch (err) {}
-    document.body.removeChild(textArea);
+async function copyToClipboard(text) {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    }
+  } catch (err) {
+    console.error('[Clipboard] Copy failed:', err);
+    return false;
   }
-};
+}
 
 function Avatar({ name }) {
   const initial = (name || '?').charAt(0).toUpperCase();
@@ -227,7 +237,7 @@ export default function CommitDetail() {
         ) : (
           <div className="pb-12">
             {files.map(f => (
-              <FileDiffRow key={f.filePath} file={f} commitHash={selectedCommit} selectedProject={selectedProject} />
+              <FileDiffRow key={`${selectedCommit}-${f.filePath}`} file={f} commitHash={selectedCommit} selectedProject={selectedProject} />
             ))}
           </div>
         )}
