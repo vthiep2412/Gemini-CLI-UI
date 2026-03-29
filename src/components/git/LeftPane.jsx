@@ -17,24 +17,8 @@ export default function LeftPane() {
   const isResizing = useRef(false);
   const containerRef = useRef(null);
   const rafRef = useRef(null);
-
-  const startResizing = useCallback((e) => {
-    e.preventDefault();
-    isResizing.current = true;
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', stopResizing);
-    document.body.style.cursor = 'ns-resize';
-    document.body.style.userSelect = 'none';
-  }, []);
-
-  const stopResizing = useCallback(() => {
-    isResizing.current = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', stopResizing);
-    document.body.style.cursor = 'default';
-    document.body.style.userSelect = 'auto';
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  }, []);
+  const handleMouseMoveRef = useRef(null);
+  const stopResizingRef = useRef(null);
 
   const handleMouseMove = useCallback((e) => {
     if (!isResizing.current || !containerRef.current) return;
@@ -50,14 +34,52 @@ export default function LeftPane() {
     });
   }, []);
 
-  // Cleanup on unmount
+  const stopResizing = useCallback(() => {
+    isResizing.current = false;
+    document.removeEventListener('mousemove', handleMouseMoveRef.current);
+    document.removeEventListener('mouseup', stopResizingRef.current);
+    document.body.style.cursor = 'default';
+    document.body.style.userSelect = 'auto';
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const startResizing = useCallback((e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.addEventListener('mousemove', handleMouseMoveRef.current);
+    document.addEventListener('mouseup', stopResizingRef.current);
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  // Sync refs to avoid stale closures in event listeners
+  useEffect(() => {
+    handleMouseMoveRef.current = handleMouseMove;
+    stopResizingRef.current = stopResizing;
+  }, [handleMouseMove, stopResizing]);
+
+  const handleKeyDown = (e) => {
+    let step = 0;
+    if (e.key === 'ArrowUp') step = 10;
+    else if (e.key === 'ArrowDown') step = -10;
+    
+    if (step !== 0) {
+      if (e.shiftKey) step *= 4;
+      e.preventDefault();
+      setCommitHeight(h => Math.max(220, Math.min(h + step, 350)));
+    }
+  };
+
   useEffect(() => {
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', stopResizing);
+      document.removeEventListener('mousemove', handleMouseMoveRef.current);
+      document.removeEventListener('mouseup', stopResizingRef.current);
+      // Reset global styles if component unmounts during drag
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [handleMouseMove, stopResizing]);
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-base)] border-r border-border overflow-hidden" ref={containerRef}>
@@ -76,8 +98,16 @@ export default function LeftPane() {
             >
               {/* Resize Handle at the top of the absolute div */}
               <div 
-                className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-30 flex items-center justify-center group"
+                className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-30 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-[var(--git-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-base)]"
                 onMouseDown={startResizing}
+                role="separator"
+                aria-orientation="horizontal"
+                aria-valuenow={commitHeight}
+                aria-valuemin={220}
+                aria-valuemax={350}
+                aria-label="Resize commit input holder"
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
               >
                 <div className="w-12 h-1 rounded-full bg-border/40 group-hover:bg-[var(--git-accent)]/50 transition-colors" />
               </div>

@@ -392,23 +392,28 @@ router.post('/generate-commit-message', async (req, res) => {
     const geminiPathString = (process.env.GEMINI_PATH || 'gemini').trim().replace(/^"|"$/g, '');
     const instruction = "Write a deep context commit message in the format of conventional commits using the provided git diff payload. Return ONLY the commit message without Markdown or preambles:";
     
-    // Construct the file arguments for git diff
-    // We skip lockfiles here too to preserve speed
-    const filterFiles = files.filter(f => !f.match(/(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i));
-    if (filterFiles.length === 0) {
-      return res.status(400).json({ error: 'At least one eligible file is required (lockfiles are excluded)' });
+    // Path Traversal Validation: Ensure all files are within the project directory
+    const validatedFiles = [];
+    const normalizedProjPath = path.resolve(projectPath);
+    for (const f of files) {
+      const resolvedPath = path.resolve(normalizedProjPath, f);
+      // Skip if path escapes project root or if it's a lockfile (consistency with existing speed filter)
+      if (resolvedPath.startsWith(normalizedProjPath + path.sep) && !f.match(/(package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/i)) {
+        validatedFiles.push(f);
+      }
     }
 
-    // console.log(`\n[Git API] Executing Secure Pipeline (spawn/pipe)`);
-    // console.log(`[Git API] Gemini Path: ${geminiPathString}`);
-    // console.log(`[Git API] Project Path: ${projectPath}`);
-    
-    let stdout = '';
-    let stderr = '';
+    if (validatedFiles.length === 0) {
+      return res.status(400).json({ error: 'At least one eligible file is required (lockfiles are excluded and paths must be valid)' });
+    }
 
-    const spawnOptions = { cwd: projectPath, shell: true };
-    const gitProcess = spawn('git', ['diff', '--', ...filterFiles], spawnOptions);
-    const geminiProcess = spawn(geminiPathString, ['-m', `gemini-2.5-flash-lite`, '-p', `"${instruction}"`], spawnOptions); // STRING ESCAPE ISSUE PLS ENSURE IT MUST BE WRAP AROUND ' or " FOR ONLY STRING ARG
+    let stdout = '';
+    let geminiStderr = '';
+    let gitStderr = '';
+
+    // Secure spawn: remove shell:true and pass arguments in an array to prevent injection
+    const gitProcess = spawn('git', ['diff', '--', ...validatedFiles], { cwd: projectPath });
+    const geminiProcess = spawn(geminiPathString, ['-m', 'gemini-2.5-flash-lite', '-p', '"'+instruction+'"'], { cwd: projectPath });
 
     gitProcess.stdout.pipe(geminiProcess.stdin);
     
@@ -417,12 +422,22 @@ router.post('/generate-commit-message', async (req, res) => {
     });
 
     geminiProcess.stderr.on('data', (data) => {
-      stderr += data.toString();
+      geminiStderr += data.toString();
+    });
+
+    gitProcess.stderr.on('data', (data) => {
+      gitStderr += data.toString();
     });
 
     await new Promise((resolve, reject) => {
       gitProcess.on('error', (err) => {
         reject(new Error(`Failed to start git: ${err.message}`));
+      });
+
+      gitProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Git diff failed with code ${code}: ${gitStderr.trim()}`));
+        }
       });
 
       geminiProcess.on('error', (err) => {
@@ -431,7 +446,7 @@ router.post('/generate-commit-message', async (req, res) => {
 
       geminiProcess.on('close', (code) => {
         if (code === 0) resolve();
-        else reject(new Error(stderr.trim() || `Gemini process exited with code ${code}`));
+        else reject(new Error(geminiStderr.trim() || `Gemini process exited with code ${code}`));
       });
     });
 

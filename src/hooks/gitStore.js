@@ -297,9 +297,9 @@ export const useGitStore = create((set, get) => ({
       ? gitStatus.files.filter(f => f.isStaged)
       : gitStatus.files;
 
-    const added = filesToCommit.filter(f => f.status.includes('A') || f.status === '??' || f.status === 'U');
+    const added = filesToCommit.filter(f => f.status.includes('A') || f.status === '??' || f.status.includes('U'));
     const deleted = filesToCommit.filter(f => f.status.includes('D'));
-    const changed = filesToCommit.filter(f => !f.status.includes('A') && f.status !== '??' && f.status !== 'U' && !f.status.includes('D'));
+    const changed = filesToCommit.filter(f => !f.status.includes('A') && f.status !== '??' && !f.status.includes('U') && !f.status.includes('D'));
 
     let summaryParts = [];
     if (changed.length) summaryParts.push(`Changed ${changed.length} file${changed.length > 1 ? 's' : ''}`);
@@ -529,14 +529,14 @@ export const useGitStore = create((set, get) => ({
   },
 
   // ── Unified Sync & Commit ──────────────────────────────────────────────
-  syncAndCommit: async () => {
+  syncAndCommit: async (overrideMessage) => {
     let { selectedProject, commitMessage, gitStatus, setLoading, fetchStatus, fetchRemoteStatus, fetchGraph } = get();
     if (!selectedProject || !gitStatus?.files?.length) return false;
     
     // Auto-generate quick message if empty
-    if (!commitMessage || !commitMessage.trim()) {
-      commitMessage = get().getQuickCommitMessage();
-      set({ commitMessage });
+    let finalMessage = overrideMessage || commitMessage;
+    if (!finalMessage || !finalMessage.trim()) {
+      finalMessage = get().getQuickCommitMessage();
     }
     
     setLoading('committing', true);
@@ -554,7 +554,7 @@ export const useGitStore = create((set, get) => ({
       const commitRes = await authenticatedFetch('/api/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project: selectedProject.name, message: commitMessage, files: filesToCommit })
+        body: JSON.stringify({ project: selectedProject.name, message: finalMessage, files: filesToCommit })
       });
       if (!commitRes.ok) throw new Error('Commit request failed');
       const commitData = await commitRes.json();

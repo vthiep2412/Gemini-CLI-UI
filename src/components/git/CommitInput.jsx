@@ -21,12 +21,14 @@ export default function CommitInput() {
   const textareaRef = useRef(null);
   const changeCount = gitStatus?.files?.length || 0;
 
+  const memoizedQuickCommit = React.useMemo(() => getQuickCommitMessage(), [gitStatus, changeCount]);
+
 
   const handleSyncAndCommit = async () => {
     if (changeCount === 0) return;
 
-    // Validation: Auto-generate quick message if currently empty
-    if (!commitMessage || !commitMessage.trim()) {
+    let msgToUse = commitMessage;
+    if (!msgToUse || !msgToUse.trim()) {
       const fallbackMsg = getQuickCommitMessage();
       if (!fallbackMsg || !fallbackMsg.trim()) {
         toast.error('Please enter a commit message');
@@ -34,12 +36,16 @@ export default function CommitInput() {
         return;
       }
       setCommitMessage(fallbackMsg);
+      msgToUse = fallbackMsg;
     }
 
     try {
-      const result = await syncAndCommit();
+      const result = await syncAndCommit(msgToUse);
       if (result && result.success) {
-        toast.success(result.warning || 'Changes committed and synchronized');
+        toast.success('Changes committed and synchronized');
+        if (result.warning) {
+          toast.warning(result.warning);
+        }
       } else if (result === false) {
         // User is notified via store error usually, but let's be safe
         toast.error('Commit failed. Check for conflicts or unstaged changes.');
@@ -103,7 +109,7 @@ export default function CommitInput() {
           value={commitMessage}
           onChange={e => setCommitMessage(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={getQuickCommitMessage() || 'Commit message'}
+          placeholder={memoizedQuickCommit || 'Commit message'}
 
           aria-label="Commit message"
           rows={2}
