@@ -142,7 +142,7 @@ export const useGitStore = create((set, get) => ({
       
       // Stale check: ensure project hasn't changed since we started fetching
       if (!data.error && get().selectedProject?.name === projAtStart) {
-        set(s => ({ gitDiff: { ...s.gitDiff, [filePath]: data.diff } }));
+        set(s => ({ gitDiff: { ...s.gitDiff, [filePath]: { original: data.originalContent, modified: data.modifiedContent } } }));
       }
     } catch (_) {}
   },
@@ -200,7 +200,7 @@ export const useGitStore = create((set, get) => ({
         set({ commitDiff: '' }); // Set to empty string instead of null to stop the loading spinner
         setError('commit-diff', data.error);
       } else {
-        set({ commitDiff: data.diff || '' });
+        set({ commitDiff: data });
       }
     } catch (e) {
       set({ commitDiff: '' });

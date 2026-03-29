@@ -131,6 +131,12 @@ router.get('/diff', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+
     // Validate git repository
     await validateGitRepository(projectPath);
     
@@ -138,72 +144,34 @@ router.get('/diff', async (req, res) => {
     const { stdout: statusOutput } = await execFileAsync('git', ['status', '--porcelain', file], { cwd: projectPath });
     const isUntracked = statusOutput.startsWith('??');
     
-    let diff;
+    let originalContent = '';
+    let modifiedContent = '';
+
     if (isUntracked) {
-      // For untracked files, show the entire file content as additions
-      const fileContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
-      const lines = fileContent.split('\n');
-      diff = `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n` + 
-             lines.map(line => `+${line}`).join('\n');
+      // For untracked files, original is empty, modified is the current content
+      modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
     } else {
-      // Get diff for tracked files
-      const { stdout } = await execFileAsync('git', ['diff', 'HEAD', '--', file], { cwd: projectPath });
-      diff = stdout || '';
+      // Get diff for tracked files to see if it's staged or unstaged
+      const { stdout: diffOutput } = await execFileAsync('git', ['diff', 'HEAD', '--', file], { cwd: projectPath });
       
-      // If no unstaged changes, check for staged changes
-      if (!diff) {
-        const { stdout: stagedDiff } = await execFileAsync('git', ['diff', '--cached', '--', file], { cwd: projectPath });
-        diff = stagedDiff;
+      try {
+        modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
+      } catch (e) {
+        // File might be deleted
+      }
+
+      try {
+        // Try getting from HEAD first
+        const { stdout: originalOut } = await execFileAsync('git', ['show', `HEAD:${file}`], { cwd: projectPath });
+        originalContent = originalOut;
+      } catch (e) {
+        // If file is new and staged, original might not exist in HEAD
       }
     }
     
-    res.json({ diff });
+    res.json({ originalContent, modifiedContent });
   } catch (error) {
     // console.error('Git diff error:', error);
-    res.json({ error: error.message });
-  }
-});
-
-// Commit changes
-router.post('/commit', async (req, res) => {
-  const { project, message, files } = req.body;
-  
-  if (!project || !message) {
-    return res.status(400).json({ error: 'Project name and commit message are required' });
-  }
-
-  try {
-    const projectPath = await getActualProjectPath(project);
-    
-    // Validate git repository
-    await validateGitRepository(projectPath);
-    
-    // Stage explicitly requested files, if any are provided
-    if (files && Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
-        const resolvedPath = path.resolve(projectPath, file);
-        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
-          return res.status(400).json({ error: `Invalid file path: ${file}` });
-        }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
-      }
-    }
-    
-    // Check if there are any staged changes to commit
-    try {
-      await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
-      // If success (exit code 0), no changes are staged
-      return res.status(400).json({ error: 'No staged changes to commit' });
-    } catch (e) {
-      // Exit code 1 means there are staged changes, which is what we want
-    }
-    
-    // Commit with message
-    const { stdout } = await execFileAsync('git', ['commit', '-m', message], { cwd: projectPath });
-    
-    res.json({ success: true, output: stdout });
-  } catch (error) {
-    // console.error('Git commit error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -355,6 +323,50 @@ router.get('/commits', async (req, res) => {
 });
 
 // Get diff for a specific commit
+
+router.post('/commit', async (req, res) => {
+  const { project, message, files } = req.body;
+
+  if (!project || !message) {
+    return res.status(400).json({ error: 'Project name and commit message are required' });
+  }
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+
+    // Validate git repository
+    await validateGitRepository(projectPath);
+
+    // Stage explicitly requested files, if any are provided
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const resolvedPath = path.resolve(projectPath, file);
+        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+          return res.status(400).json({ error: `Invalid file path: ${file}` });
+        }
+        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+      }
+    }
+
+    // Check if there are any staged changes to commit
+    try {
+      await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
+      // If success (exit code 0), no changes are staged
+      return res.status(400).json({ error: 'No staged changes to commit' });
+    } catch (e) {
+      // Exit code 1 means there are staged changes, which is what we want
+    }
+
+    // Commit with message
+    const { stdout } = await execFileAsync('git', ['commit', '-m', message], { cwd: projectPath });
+
+    res.json({ success: true, output: stdout });
+  } catch (error) {
+    // console.error('Git commit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/commit-diff', async (req, res) => {
   const { project, commit } = req.query;
   
@@ -365,17 +377,113 @@ router.get('/commit-diff', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
-    // Get diff for the commit (using -m and --first-parent to handle merge commits properly)
+    // Get diff stats for the commit
     const { stdout } = await execFileAsync(
       'git',
-      ['show', '--patch', '-m', '--first-parent', '--format=%b', commit],
+      ['show', '--numstat', '--name-status', '--oneline', '-M', commit],
       { cwd: projectPath }
     );
     
-    res.json({ diff: stdout });
+    const lines = stdout.split('\n');
+    const files = [];
+    let fileIndex = 1; // 0 is the commit message/oneline
+
+    // parse name-status output
+    const statusMap = {};
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+        const parts = line.split('\t');
+        if (['M', 'A', 'D', 'C', 'R', 'T', 'U', 'X', 'B'].includes(parts[0][0])) {
+            const status = parts[0][0];
+            const oldPath = status === 'R' ? parts[1] : null;
+            const filePath = status === 'R' ? parts[2] : parts[1];
+            statusMap[filePath] = { status, oldPath };
+        }
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+
+      const parts = line.split('\t');
+      // Look for numstat lines: <adds>	<dels>	<filePath>
+      if (parts.length >= 3 && /^[0-9-]+$/.test(parts[0]) && /^[0-9-]+$/.test(parts[1])) {
+          const adds = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
+          const dels = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
+          let filePath = parts[2];
+          let oldPath = null;
+
+          if (filePath.includes(' => ')) {
+              // Handle "oldName => newName" or "path/{old => new}/file"
+              // For simplicity, let's use name-status parsing above to reliably get paths for renames
+          }
+
+          const statusInfo = statusMap[filePath] || { status: 'M' };
+
+          files.push({
+              filePath: filePath,
+              status: statusInfo.status,
+              oldPath: statusInfo.oldPath,
+              adds,
+              dels
+          });
+      }
+    }
+
+    res.json({ files });
   } catch (error) {
     // console.error('Git commit diff error:', error);
     res.json({ error: error.message });
+  }
+});
+
+router.get('/commit-file-diff', async (req, res) => {
+  const { project, commit, file, oldPath } = req.query;
+
+  if (!project || !commit || !file) {
+    return res.status(400).json({ error: 'Project name, commit hash, and file path are required' });
+  }
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+    if (oldPath) {
+      const resolvedOldPath = path.resolve(projectPath, oldPath);
+      if (!resolvedOldPath.startsWith(path.resolve(projectPath) + path.sep)) {
+        return res.status(400).json({ error: `Invalid old file path: ${oldPath}` });
+      }
+    }
+
+
+    let originalContent = '';
+    let modifiedContent = '';
+
+    // Get modified content (content at the commit)
+    try {
+      const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], { cwd: projectPath });
+      modifiedContent = stdout;
+    } catch (e) {
+      // File might have been deleted in this commit
+    }
+
+    // Get original content (content at the parent commit)
+    try {
+      const parentPath = oldPath || file;
+      const { stdout } = await execFileAsync('git', ['show', `${commit}^1:${parentPath}`], { cwd: projectPath });
+      originalContent = stdout;
+    } catch (e) {
+      // File might be new in this commit, or parent might not have it
+    }
+
+    res.json({ originalContent, modifiedContent });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

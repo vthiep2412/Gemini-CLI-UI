@@ -9,6 +9,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useShallow } from 'zustand/react/shallow';
 import Tooltip from '../common/Tooltip';
+import MonacoDiffViewer from '../common/MonacoDiffViewer';
+import { authenticatedFetch } from '../../utils/api';
 
 const STATUS_CONFIG = {
   M: { label: 'Modified', bg: 'bg-yellow-500/20', text: 'text-yellow-500' },
@@ -20,45 +22,17 @@ const STATUS_CONFIG = {
   R: { label: 'Renamed',  bg: 'bg-blue-500/20',   text: 'text-blue-400'   },
 };
 
-function DiffViewer({ diff, wrapText }) {
-  if (!diff) return <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>;
 
-  const lines = diff.split('\n');
-  return (
-    <div className="text-[10px] font-mono leading-relaxed pb-12 overflow-auto max-h-96">
-      {lines.map((line, i) => {
-        const isAdd = line.startsWith('+') && !line.startsWith('+++');
-        const isDel = line.startsWith('-') && !line.startsWith('---');
-        const isHunk = line.startsWith('@@');
-        return (
-          <div
-            key={i}
-            className={`flex min-w-0 transition-colors ${
-              isAdd ? 'bg-green-500/10 text-green-500' :
-              isDel ? 'bg-red-500/10 text-red-500' :
-              isHunk ? 'bg-[var(--git-accent)]/10 text-[var(--git-accent)] font-bold' :
-              'text-[var(--text-secondary)] opacity-80'
-            } ${wrapText ? '' : 'whitespace-pre overflow-x-auto'}`}
-          >
-            <span className="select-none w-6 text-center flex-shrink-0 opacity-40 mr-2">
-              {isAdd ? '+' : isDel ? '-' : ' '}
-            </span>
-            <span className={`flex-1 px-1 ${wrapText ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'}`}>
-              {isHunk ? line : line.slice(1) || ' '}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-export default function FileRow({ filePath, status, mode = 'changes', section, commitDiffChunk, isFocused }) {
+export default function FileRow({ filePath, status, mode = 'changes', section, isFocused, commitHash, oldPath }) {
   const [expanded, setExpanded] = useState(false);
-  const [wrapText, setWrapText] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const confirmTimeoutRef = React.useRef(null);
   const rowRef = React.useRef(null);
+  const [commitFileDiff, setCommitFileDiff] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState(null);
+  const selectedProject = useGitStore(state => state.selectedProject);
 
   useEffect(() => {
     if (isFocused && rowRef.current) {
@@ -86,11 +60,30 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
     }))
   );
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['U'];
-  const diff = commitDiffChunk ?? gitDiff[filePath];
+  const diff = mode === 'commit-view' ? commitFileDiff : gitDiff[filePath];
 
-  const handleExpand = () => {
-    if (!expanded && !diff && mode !== 'commit-view') {
-      fetchFileDiff(filePath);
+  const handleExpand = async () => {
+    if (!expanded) {
+      if (mode === 'commit-view' && !commitFileDiff && commitHash && selectedProject) {
+        setDiffLoading(true);
+        setDiffError(null);
+        try {
+          const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(filePath)}&oldPath=${encodeURIComponent(oldPath || filePath)}`);
+          if (res.ok) {
+            const data = await res.json();
+            setCommitFileDiff({ original: data.originalContent, modified: data.modifiedContent });
+          } else {
+             setDiffError('Failed to load diff');
+          }
+        } catch (e) {
+          console.error('Failed to load file diff:', e);
+          setDiffError('Error loading diff');
+        } finally {
+          setDiffLoading(false);
+        }
+      } else if (!diff && mode !== 'commit-view') {
+        fetchFileDiff(filePath);
+      }
     }
     setExpanded(v => !v);
   };
@@ -132,17 +125,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
         </span>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {expanded && (
-            <Tooltip label={wrapText ? 'Horizontal scroll' : 'Wrap text'}>
-              <button
-                aria-label={wrapText ? 'Toggle horizontal scroll' : 'Wrap text'}
-                onClick={(e) => { e.stopPropagation(); setWrapText(v => !v); }}
-                className={`p-1 rounded transition-all hover:bg-[var(--bg-base)] ${wrapText ? 'text-[var(--git-accent)]' : 'text-[var(--text-secondary)]'}`}
-              >
-                {wrapText ? <ArrowLeftRight className="w-3 h-3" /> : <AlignLeft className="w-3 h-3" />}
-              </button>
-            </Tooltip>
-          )}
+
           {(mode === 'changes') && (
             <>
               {(status === 'M' || status === 'D' || status === 'U') && section !== 'staged' && (
@@ -204,7 +187,21 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate opacity-60">{filePath}</span>
               </div>
-              <DiffViewer diff={diff} wrapText={wrapText} />
+              <div className="overflow-hidden">
+                {diffLoading || (!diff && mode !== 'commit-view') ? (
+                  <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>
+                ) : diffError ? (
+                  <div className="p-3 text-[10px] text-red-500 font-mono">{diffError}</div>
+                ) : diff ? (
+                  <MonacoDiffViewer
+                    original={diff.original || ''}
+                    modified={diff.modified || ''}
+                    height="300px"
+                  />
+                ) : (
+                   <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono">No diff available</div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
