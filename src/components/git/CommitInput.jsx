@@ -6,9 +6,11 @@ import React, { useRef, useEffect } from 'react';
 import { Sparkles, Zap, Upload, Loader2 } from 'lucide-react';
 import Tooltip from '../common/Tooltip';
 import { useGitStore } from '../../hooks/gitStore';
+import { useTheme } from '../../contexts/ThemeContext';
 import { toast } from 'sonner';
 
 export default function CommitInput() {
+  const { isDarkMode } = useTheme();
   const commitMessage = useGitStore(s => s.commitMessage);
   const setCommitMessage = useGitStore(s => s.setCommitMessage);
   const syncAndCommit = useGitStore(s => s.syncAndCommit);
@@ -113,10 +115,12 @@ export default function CommitInput() {
 
           aria-label="Commit message"
           rows={2}
-          className="w-full bg-white/10 border border-white/5 rounded-md px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/40
-            font-sans resize-none outline-none focus:bg-white/20 focus:border-[var(--git-accent)]/30 transition-all leading-relaxed
-            flex-1 min-h-[60px] overflow-y-auto custom-scrollbar shadow-sm"
-        />
+          className={`w-full rounded-md border px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-secondary)]/40
+            font-sans resize-none outline-none transition-all leading-relaxed
+            flex-1 min-h-[60px] overflow-y-auto custom-scrollbar shadow-sm
+            ${isDarkMode 
+              ? 'bg-white/10 border-white/5 focus:bg-white/20 focus:border-[var(--git-accent)]/30' 
+              : 'bg-white border-slate-200 focus:border-[var(--git-accent)]/50 focus:ring-1 focus:ring-[var(--git-accent)]/10'}`}        />
       </div>
 
       {/* Action buttons */}

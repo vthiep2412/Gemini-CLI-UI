@@ -21,7 +21,7 @@ export const useGitStore = create((set, get) => ({
   remoteStatus: null,         // { hasRemote, ahead, behind, isUpToDate, remoteName }
   stagedFiles: new Set(),     // Set<string> — files checked for staging
   selectedFiles: new Set(),   // Set<string> — tracks expanded/active files locally
-  gitDiff: {},                // { [filePath]: diffString }
+  gitDiff: {},                // { [filePath]: { original: string, modified: string } }
   graphData: [],              // raw commits from /api/git/graph
   graphLayout: [],            // computed by Web Worker
   graphTotal: 0,              // total commit count (for infinite scroll)
@@ -197,13 +197,13 @@ export const useGitStore = create((set, get) => ({
       const data = await res.json();
       
       if (data.error) {
-        set({ commitDiff: '' }); // Set to empty string instead of null to stop the loading spinner
+        set({ commitDiff: null });
         setError('commit-diff', data.error);
       } else {
         set({ commitDiff: data });
       }
     } catch (e) {
-      set({ commitDiff: '' });
+      set({ commitDiff: null });
       setError('commit-diff', e.message);
     }
   },

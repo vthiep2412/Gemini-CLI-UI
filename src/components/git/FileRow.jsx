@@ -8,19 +8,51 @@ import { ChevronRight, ChevronDown, Check, Trash2, AlignLeft, ArrowLeftRight, Pl
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useShallow } from 'zustand/react/shallow';
+import { useTheme } from '../../contexts/ThemeContext';
 import Tooltip from '../common/Tooltip';
 import MonacoDiffViewer from '../common/MonacoDiffViewer';
 import { authenticatedFetch } from '../../utils/api';
 
-const STATUS_CONFIG = {
-  M: { label: 'Modified', bg: 'bg-yellow-500/20', text: 'text-yellow-500' },
-  A: { label: 'Added',    bg: 'bg-green-500/20',  text: 'text-green-500'  },
-  D: { label: 'Deleted',  bg: 'bg-red-500/20',    text: 'text-red-500'    },
-  U: { label: 'Untracked', bg: 'bg-green-500/20',  text: 'text-green-500'  },
-  '??': { label: 'Untracked', bg: 'bg-green-500/20', text: 'text-green-500' },
-  C: { label: 'Conflict', bg: 'bg-orange-500/20', text: 'text-orange-500' },
-  R: { label: 'Renamed',  bg: 'bg-blue-500/20',   text: 'text-blue-400'   },
-};
+const STATUS_CONFIG = (isDark) => ({
+  M: { label: 'Modified',  
+       bg: isDark ? 'bg-yellow-500/20' : 'bg-amber-500', 
+       text: isDark ? 'text-yellow-500' : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-amber-600/30' 
+     },
+  A: { label: 'Added',     
+       bg: isDark ? 'bg-green-500/20'  : 'bg-emerald-500', 
+       text: isDark ? 'text-green-500'  : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+     },
+  D: { label: 'Deleted',   
+       bg: isDark ? 'bg-red-500/20'    : 'bg-rose-500', 
+       text: isDark ? 'text-red-500'    : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-rose-600/30'
+     },
+  U: { label: 'Untracked', 
+       bg: isDark ? 'bg-green-500/20'  : 'bg-emerald-500', 
+       text: isDark ? 'text-green-500'  : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+     },
+  '??': { label: 'Untracked', 
+          bg: isDark ? 'bg-green-500/20' : 'bg-emerald-500', 
+          text: isDark ? 'text-green-500' : 'text-white',
+          border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+        },
+  C: { label: 'Conflict',  
+       bg: isDark ? 'bg-orange-500/20' : 'bg-orange-500', 
+       text: isDark ? 'text-orange-500' : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-orange-600/30'
+     },
+  R: { label: 'Renamed',   
+       bg: isDark ? 'bg-blue-500/20'   : 'bg-blue-500', 
+       text: isDark ? 'text-blue-400'   : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-blue-600/30'
+     },
+});
+
+const DARK_STATUS_CONFIG = STATUS_CONFIG(true);
+const LIGHT_STATUS_CONFIG = STATUS_CONFIG(false);
 
 
 
@@ -32,6 +64,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
   const [commitFileDiff, setCommitFileDiff] = useState(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState(null);
+  const [isSideBySide, setIsSideBySide] = useState(null);
   const selectedProject = useGitStore(state => state.selectedProject);
 
   useEffect(() => {
@@ -50,6 +83,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
     }
   }, [confirming]);
 
+  const { isDarkMode } = useTheme();
   const { gitDiff, discardFile, fetchFileDiff, stageFiles, unstageFiles } = useGitStore(
     useShallow(state => ({
       gitDiff: state.gitDiff,
@@ -59,7 +93,8 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
       unstageFiles: state.unstageFiles,
     }))
   );
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['U'];
+  const statusConfig = isDarkMode ? DARK_STATUS_CONFIG : LIGHT_STATUS_CONFIG;
+  const cfg = statusConfig[status] || statusConfig['U'];
   const diff = mode === 'commit-view' ? commitFileDiff : gitDiff[filePath];
 
   const handleExpand = async () => {
@@ -99,12 +134,16 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
   const fileName = parts.pop();
   const dirPart = parts.length > 0 ? parts.join('/') + '/' : '';
 
+  const rowBgClass = isDarkMode 
+    ? (expanded ? 'bg-[var(--bg-muted)]/20' : isFocused ? 'bg-[var(--bg-muted)]/40' : '')
+    : (expanded ? 'bg-slate-100' : isFocused ? 'bg-slate-200' : '');
+
   return (
     <div className={`transition-colors truncate border-b border-border/50 ${isFocused ? 'ring-1 ring-inset ring-[var(--git-accent)] bg-[var(--git-accent)]/5' : ''}`}>
       <div
         ref={rowRef}
-        className={`flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-muted)]/30 group cursor-pointer transition-all duration-200
-          ${expanded ? 'bg-[var(--bg-muted)]/20' : ''} ${isFocused ? 'bg-[var(--bg-muted)]/40' : ''}`}
+        className={`flex items-center gap-2 px-3 py-1.5 ${isDarkMode ? 'hover:bg-[var(--bg-muted)]/30' : 'hover:bg-slate-200/60'} group cursor-pointer transition-all duration-200
+          ${rowBgClass}`}
         onClick={handleExpand}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -125,6 +164,18 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         </span>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <Tooltip label={isSideBySide === true ? 'Switch to Unified View' : 'Switch to Split View'}>
+            <button
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setIsSideBySide(prev => prev === null ? true : !prev); 
+              }}
+              className={`p-1 rounded transition-all text-[var(--text-secondary)] opacity-60 hover:opacity-100
+                ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-300/50'}`}
+            >
+              {isSideBySide === true ? <AlignLeft size={13} /> : <ArrowLeftRight size={13} />}
+            </button>
+          </Tooltip>
 
           {(mode === 'changes') && (
             <>
@@ -167,7 +218,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         </div>
 
         <Tooltip label={cfg.label}>
-          <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} shadow-sm group-hover:scale-110`}>
+          <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm group-hover:scale-110`}>
             {status === '??' ? 'U' : status}
           </span>
         </Tooltip>
@@ -180,11 +231,11 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
-            className="overflow-hidden bg-[var(--bg-base)]/30"
+            className={`overflow-hidden ${isDarkMode ? 'bg-[var(--bg-base)]/30' : 'bg-slate-50 border-t border-border/30'}`}
           >
             <div>
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-surface)]/30">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
+              <div className={`flex items-center gap-2 px-4 py-1.5 ${isDarkMode ? 'bg-[var(--bg-surface)]/30' : 'bg-white border-b border-border/20'}`}>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text} ${cfg.border}`}>{cfg.label}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate opacity-60">{filePath}</span>
               </div>
               <div className="overflow-hidden">
@@ -197,6 +248,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
                     original={diff.original || ''}
                     modified={diff.modified || ''}
                     height="300px"
+                    renderSideBySide={isSideBySide === null ? undefined : isSideBySide}
                   />
                 ) : (
                    <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono">No diff available</div>

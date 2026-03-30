@@ -151,9 +151,6 @@ router.get('/diff', async (req, res) => {
       // For untracked files, original is empty, modified is the current content
       modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
     } else {
-      // Get diff for tracked files to see if it's staged or unstaged
-      const { stdout: diffOutput } = await execFileAsync('git', ['diff', 'HEAD', '--', file], { cwd: projectPath });
-      
       try {
         modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
       } catch (e) {
@@ -376,61 +373,71 @@ router.get('/commit-diff', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
-    // Get diff stats for the commit
+    await validateGitRepository(projectPath);
+    // Get diff stats for the commit with -m to support merge commits
     const { stdout } = await execFileAsync(
       'git',
-      ['show', '--numstat', '--name-status', '--oneline', '-M', commit],
+      ['show', '-m', '--numstat', '--name-status', '--oneline', '-M', commit],
       { cwd: projectPath }
     );
     
     const lines = stdout.split('\n');
-    const files = [];
-    let fileIndex = 1; // 0 is the commit message/oneline
+    const filesMap = new Map();
 
-    // parse name-status output
-    const statusMap = {};
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) continue;
-        const parts = line.split('\t');
-        if (['M', 'A', 'D', 'C', 'R', 'T', 'U', 'X', 'B'].includes(parts[0][0])) {
-            const status = parts[0][0];
-            const oldPath = status === 'R' ? parts[1] : null;
-            const filePath = status === 'R' ? parts[2] : parts[1];
-            statusMap[filePath] = { status, oldPath };
-        }
-    }
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
+    // The first line is usually the oneline header. 
+    // However, -m for a merge commit can produce MULTIPLE headers if git show is run naively.
+    // We'll iterate through all lines and detect patterns.
+    
+    for (const line of lines) {
       if (!line) continue;
-
       const parts = line.split('\t');
-      // Look for numstat lines: <adds>	<dels>	<filePath>
+
+      // 1. Detect Name-Status lines: <Status>[\t<oldPath>]\t<filePath>
+      // Status can be single (M, A, D) or multi (MM, AA) for merges
+      if (parts.length >= 2 && /^[A-Z]{1,2}[0-9]*$/.test(parts[0])) {
+        const statusRaw = parts[0];
+        const status = statusRaw[0]; // Take primary status character
+        let filePath = parts[parts.length - 1]; // Usually the last part
+        let oldPath = status === 'R' ? parts[1] : null;
+
+        if (!filesMap.has(filePath)) {
+          filesMap.set(filePath, { filePath, status, oldPath, adds: 0, dels: 0 });
+        } else {
+          // If already exists (e.g. from a previous parent diff in -m), update status if needed
+          const existing = filesMap.get(filePath);
+          existing.status = status;
+          if (oldPath) existing.oldPath = oldPath;
+        }
+      }
+
+      // 2. Detect Numstat lines: <adds>\t<dels>\t<filePath>
       if (parts.length >= 3 && /^[0-9-]+$/.test(parts[0]) && /^[0-9-]+$/.test(parts[1])) {
-          const adds = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
-          const dels = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
-          let filePath = parts[2];
-          let oldPath = null;
+        const adds = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
+        const dels = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
+        let filePath = parts[2];
 
-          if (filePath.includes(' => ')) {
-              // Handle "oldName => newName" or "path/{old => new}/file"
-              // For simplicity, let's use name-status parsing above to reliably get paths for renames
+        // Handle rename syntax in numstat: "dir/{old => new}" or "old => new"
+        if (filePath.includes(' => ')) {
+          // Simplistic extraction of the "new" part
+          // e.g. "src/{old.js => new.js}" -> "src/new.js"
+          const match = filePath.match(/^(.*)\{(.*) => (.*)\}(.*)$/);
+          if (match) {
+            filePath = (match[1] + match[3] + match[4]).replace(/\/\//g, '/');
+          } else {
+            const simpleMatch = filePath.match(/^(.*) => (.*)$/);
+            if (simpleMatch) filePath = simpleMatch[2];
           }
+        }
 
-          const statusInfo = statusMap[filePath] || { status: 'M' };
-
-          files.push({
-              filePath: filePath,
-              status: statusInfo.status,
-              oldPath: statusInfo.oldPath,
-              adds,
-              dels
-          });
+        const entry = filesMap.get(filePath) || { filePath, status: 'M', adds: 0, dels: 0 };
+        // Aggregate adds/dels for merges where the same file might appear multiple times
+        entry.adds = Math.max(entry.adds, adds); 
+        entry.dels = Math.max(entry.dels, dels);
+        filesMap.set(filePath, entry);
       }
     }
 
+    const files = Array.from(filesMap.values());
     res.json({ files });
   } catch (error) {
     // console.error('Git commit diff error:', error);
@@ -460,21 +467,27 @@ router.get('/commit-file-diff', async (req, res) => {
       }
     }
 
+    // Validate commit reference to prevent command injection or misinterpretation
+    if (!/^[a-zA-Z0-9_\-\.\^~\/@{}]+$/.test(commit)) {
+      return res.status(400).json({ error: 'Invalid commit reference' });
+    }
 
     let originalContent = '';
     let modifiedContent = '';
 
     // Get modified content (content at the commit)
     try {
+      // Use the 'commit:file' syntax to get the raw content of the file at that specific commit
       const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], { cwd: projectPath });
       modifiedContent = stdout;
     } catch (e) {
-      // File might have been deleted in this commit
+      // File might have been deleted in this commit or not exist in this version
     }
 
     // Get original content (content at the parent commit)
     try {
       const parentPath = oldPath || file;
+      // Use the 'commit^1:file' syntax to get raw content from the parent commit
       const { stdout } = await execFileAsync('git', ['show', `${commit}^1:${parentPath}`], { cwd: projectPath });
       originalContent = stdout;
     } catch (e) {

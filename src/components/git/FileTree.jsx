@@ -59,6 +59,7 @@ export default function FileTree() {
   const gitStatus = useGitStore(s => s.gitStatus);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const commitDiff = useGitStore(s => s.commitDiff);
+  const error = useGitStore(s => s.error);
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   // ── Hooks must be at the top level, unconditional ────────────────────────
@@ -111,6 +112,13 @@ export default function FileTree() {
   };
 
   // ── Commit view mode ──────────────────────────────────────────────────────
+  const commitHash = useMemo(() => {
+    if (!selectedCommit) return '';
+    return typeof selectedCommit === 'string' 
+      ? selectedCommit 
+      : (selectedCommit.hash || selectedCommit.sha || selectedCommit.id || '');
+  }, [selectedCommit]);
+
   if (selectedCommit) {
     return (
       <div 
@@ -122,29 +130,30 @@ export default function FileTree() {
         <div className="px-3 py-2 bg-[var(--accent)]/5 border-b border-border/30">
           <span className="text-[10px] text-[var(--accent)] font-bold uppercase tracking-wider">
             Viewing Commit: <span className="font-mono">
-              {(() => {
-                const hash = typeof selectedCommit === 'string' 
-                  ? selectedCommit 
-                  : (selectedCommit?.hash || selectedCommit?.sha || selectedCommit?.id || '');
-                return String(hash).slice(0, 7) || 'unknown';
-              })()}
+              {commitHash.slice(0, 7) || 'unknown'}
             </span>
           </span>
         </div>
         {commitFiles.length === 0 && (
           <div className="p-8 text-xs text-[var(--text-secondary)] font-mono text-center">
-            {commitDiff === null ? 'Loading diff…' : 'No file changes in this commit'}
+            {error?.action === 'commit-diff' ? (
+              <span className="text-red-500 font-bold uppercase tracking-widest">{error.message || 'Failed to load diff'}</span>
+            ) : commitDiff === null ? (
+              'Loading diff…'
+            ) : (
+              'No file changes in this commit'
+            )}
           </div>
         )}
         <div className="">
           {commitFiles.map((f, i) => (
             <FileRow
-              key={`${selectedCommit}-${f.filePath}`}
+              key={`${commitHash}-${f.filePath}`}
               filePath={f.filePath}
               oldPath={f.oldPath}
               status={f.status}
               mode="commit-view"
-              commitHash={selectedCommit}
+              commitHash={commitHash}
               isFocused={focusedIndex === i}
             />
           ))}

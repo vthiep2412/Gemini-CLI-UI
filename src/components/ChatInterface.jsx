@@ -27,9 +27,12 @@ import { MicButton } from './MicButton.jsx';
 import { api } from '../utils/api';
 import { playNotificationSound } from '../utils/notificationSound';
 import { useMessages } from '../contexts/MessageContext';
+import { useAuth } from '../contexts/AuthContext';
+import Avatar from './common/Avatar';
 
 // Memoized message component to prevent unnecessary re-renders
-const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
+const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShowSettings, autoExpandTools, showRawParameters, createDiff }) => {
+  const { user } = useAuth();
   const isGrouped = prevMessage && prevMessage.type === message.type && 
                    prevMessage.type === 'assistant' && 
                    !prevMessage.isToolUse && !message.isToolUse;
@@ -101,9 +104,7 @@ const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShow
             </div>
           </div>
           {!isGrouped && (
-            <div className="hidden sm:flex w-8 h-8 bg-blue-600 rounded-full items-center justify-center text-white text-sm flex-shrink-0">
-              U
-            </div>
+            <Avatar name={user?.username || 'User'} className="bg-blue-600 text-white" />
           )}
         </div>
       ) : (
@@ -1069,7 +1070,44 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
   const [slashPosition, setSlashPosition] = useState(-1);
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [geminiStatus, setGeminiStatus] = useState(null);
-
+  
+  // Memoized diff calculation to prevent recalculating on every render
+  const createDiff = useMemo(() => {
+    const cache = new Map();
+    const MAX_CACHE_SIZE = 100;
+    return (oldStr, newStr) => {
+      // Use full content for cache key to avoid collisions
+      const cacheKey = `${oldStr || ''}\x00${newStr || ''}`;
+      if (cache.has(cacheKey)) return cache.get(cacheKey);
+      
+      const diff = [];
+      const oldLines = (oldStr || '').split('\n');
+      const newLines = (newStr || '').split('\n');
+      
+      // Simple line-based diff algorithm
+      let i = 0, j = 0;
+      while (i < oldLines.length || j < newLines.length) {
+        if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+          diff.push({ type: 'equal', content: oldLines[i] });
+          i++; j++;
+        } else if (i < oldLines.length && (j >= newLines.length || oldLines[i] !== newLines[j])) {
+          diff.push({ type: 'removed', content: oldLines[i] });
+          i++;
+        } else if (j < newLines.length) {
+          diff.push({ type: 'added', content: newLines[j] });
+          j++;
+        }
+      }
+      
+      // Evict oldest entry if cache is full
+      if (cache.size >= MAX_CACHE_SIZE) {
+        const firstKey = cache.keys().next().value;
+        cache.delete(firstKey);
+      }
+      cache.set(cacheKey, diff);
+      return diff;
+    };
+  }, []);
 
     const convertSessionMessages = (rawMessages) => {
     const converted = [];
@@ -1231,7 +1269,13 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
                 setTimeout(() => scrollToBottom(), 200);
               }
             } catch (error) {
-              // Failed to load
+              console.error('Failed to load session messages:', error);
+              setSessionMessages([]);
+              setChatMessages([{
+                type: 'error',
+                content: 'Failed to load session messages. Please try refreshing.',
+                timestamp: new Date().toISOString()
+              }]);
             } finally {
               setIsLoadingSessionMessages(false);
             }
@@ -1249,7 +1293,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
     };
     
     loadMessages();
-  }, [selectedSession?.id, selectedProject?.name, api.sessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
+  }, [selectedSession?.id, selectedProject?.name, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {
@@ -2193,6 +2237,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
                   onShowSettings={onShowSettings}
                   autoExpandTools={autoExpandTools}
                   showRawParameters={showRawParameters}
+                  createDiff={createDiff}
                 />
               );
             })}

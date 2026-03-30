@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronRight, Copy } from 'lucide-react';
+import { ChevronRight, Copy, AlignLeft, ArrowLeftRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import Tooltip from '../common/Tooltip';
 
 import { useGitStore } from '../../hooks/gitStore';
 import MonacoDiffViewer from '../common/MonacoDiffViewer';
+import { useTheme } from '../../contexts/ThemeContext';
 import { authenticatedFetch } from '../../utils/api';
-
-
+import Avatar from '../common/Avatar';
 
 async function copyToClipboard(text) {
   if (!text) return false;
@@ -35,26 +35,19 @@ async function copyToClipboard(text) {
   }
 }
 
-function Avatar({ name }) {
-  const initial = (name || '?').charAt(0).toUpperCase();
-  return (
-    <div className="w-8 h-8 rounded bg-[var(--git-accent)]/20 text-[var(--git-accent)] flex items-center justify-center font-bold text-[14px] flex-shrink-0">
-      {initial}
-    </div>
-  );
-}
-
 function FileDiffRow({ file, commitHash, selectedProject }) {
+  const { isDarkMode } = useTheme();
   const [diffData, setDiffData] = useState(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [diffError, setDiffError] = useState(null);
   const [open, setOpen] = useState(false);
+  const [isUnified, setIsUnified] = useState(null);
   
   const STATUS_CONFIG = { 
-    M: 'bg-yellow-500/20 text-yellow-500', 
-    A: 'bg-green-500/20 text-green-500', 
-    D: 'bg-red-500/20 text-red-500', 
-    R: 'bg-blue-500/20 text-blue-400' 
+    M: isDarkMode ? 'bg-yellow-500/20 text-yellow-500' : 'bg-amber-500 text-white border border-amber-600/30', 
+    A: isDarkMode ? 'bg-green-500/20 text-green-500'  : 'bg-emerald-500 text-white border border-emerald-600/30', 
+    D: isDarkMode ? 'bg-red-500/20 text-red-500'    : 'bg-rose-500 text-white border border-rose-600/30', 
+    R: isDarkMode ? 'bg-blue-500/20 text-blue-400'   : 'bg-blue-500 text-white border border-blue-600/30' 
   };
 
   const handleExpand = async () => {
@@ -85,10 +78,18 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
 
   return (
     <div className="border-b border-border/30 last:border-0">
-      <button
-        className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs transition-all
+      <div
+        className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs cursor-pointer transition-all
           ${open ? 'bg-[var(--bg-muted)]/40' : ''}`}
         onClick={handleExpand}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleExpand();
+          }
+        }}
+        role="button"
+        tabIndex={0}
       >
         <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded shadow-sm ${STATUS_CONFIG[file.status] || ''}`}>
           {file.status}
@@ -100,11 +101,28 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {file.adds > 0 && <span className="text-green-500/80 text-[12px] font-mono font-bold">+{file.adds}</span>}
           {file.dels > 0 && <span className="text-red-500/80 text-[12px] font-mono font-bold">-{file.dels}</span>}
-          <div className={`ml-2 transition-transform duration-300 ${open ? 'rotate-90 text-[var(--git-accent)]' : 'opacity-40'}`}>
+          
+          <Tooltip label={isUnified === null ? 'Toggle View Mode' : isUnified ? 'Switch to Split View' : 'Switch to Unified View'}>
+            <button
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                // If it's currently null, it means we're in auto mode. Let's force it to unified on first click
+                // Or try to toggle from the standard wider default.
+                setIsUnified(prev => prev === null ? true : !prev); 
+              }}
+              className={`p-1.5 rounded transition-all ml-1 flex items-center justify-center
+                ${isDarkMode ? 'hover:bg-white/10 text-white/40 hover:text-white/80' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'}`}
+            >
+              {/* Show the icon for the state it will switch TO */}
+              {isUnified === true ? <ArrowLeftRight size={13} /> : <AlignLeft size={13} />}
+            </button>
+          </Tooltip>
+
+          <div className={`ml-1 transition-transform duration-300 ${open ? 'rotate-90 text-[var(--git-accent)]' : 'opacity-40'}`}>
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
-      </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -113,10 +131,10 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="overflow-hidden bg-[var(--bg-base)]/30"
+            className={`overflow-hidden ${isDarkMode ? 'bg-[var(--bg-base)]/30' : 'bg-slate-50'}`}
           >
             <div className="border-t border-border/40">
-              <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-surface)]/10 border-b border-border/20">
+              <div className={`flex items-center justify-between px-4 py-2 border-b border-border/20 ${isDarkMode ? 'bg-[var(--bg-surface)]/10' : 'bg-white'}`}>
                 <span className="text-[9px] text-[var(--text-secondary)] font-mono truncate opacity-60 tracking-wider uppercase">{file.filePath}</span>
               </div>
               <div className="overflow-hidden shadow-inner">
@@ -129,6 +147,7 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
                     original={diffData.originalContent || ''}
                     modified={diffData.modifiedContent || ''}
                     height="400px"
+                    renderSideBySide={isUnified === null ? undefined : !isUnified}
                   />
                 ) : (
                   <div className="p-4 text-center text-xs text-[var(--text-secondary)]">No diff available</div>
@@ -147,6 +166,7 @@ export default function CommitDetail() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const commitDiff = useGitStore(s => s.commitDiff);
   const graphLayout = useGitStore(s => s.graphLayout);
+  const error = useGitStore(s => s.error);
   const selectedProject = useGitStore(s => s.selectedProject);
 
   const commitMeta = useMemo(
@@ -232,7 +252,12 @@ export default function CommitDetail() {
 
       {/* File List */}
       <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none">
-        {commitDiff === null ? (
+        {error?.action === 'commit-diff' ? (
+          <div className="h-40 flex flex-col items-center justify-center gap-2">
+            <div className="text-[10px] font-bold tracking-[0.2em] text-red-500 uppercase">Error loading commit</div>
+            <div className="text-[9px] text-[var(--text-secondary)] font-mono px-6 text-center">{error.message}</div>
+          </div>
+        ) : commitDiff === null ? (
           <div className="h-40 flex items-center justify-center">
             <div className="text-[10px] font-bold tracking-[0.2em] text-[var(--text-secondary)] uppercase animate-pulse opacity-40">Loading changes…</div>
           </div>
