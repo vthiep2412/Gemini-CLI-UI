@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Copy, AlignLeft, ArrowLeftRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -42,6 +42,13 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
   const [diffError, setDiffError] = useState(null);
   const [open, setOpen] = useState(false);
   const [isUnified, setIsUnified] = useState(null);
+  const abortControllerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
   
   const STATUS_CONFIG = useMemo(() => ({ 
     M: isDarkMode ? 'bg-yellow-500/20 text-yellow-500' : 'bg-amber-500 text-white border border-amber-600/30', 
@@ -52,21 +59,32 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
 
   const handleExpand = async () => {
     if (!open && !diffData && commitHash && selectedProject) {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const { signal } = controller;
+
       setLoadingDiff(true);
       setDiffError(null);
       try {
-        const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(file.filePath)}&oldPath=${encodeURIComponent(file.oldPath || file.filePath)}`);
-        if (res.ok) {
-          const data = await res.json();
+        const res = await authenticatedFetch(
+          `/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(file.filePath)}&oldPath=${encodeURIComponent(file.oldPath || file.filePath)}`,
+          { signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+        if (!signal.aborted) {
           setDiffData(data);
-        } else {
-          setDiffError('Failed to load diff');
         }
       } catch (e) {
-        console.error('Failed to load file diff:', e);
-        setDiffError('Error loading diff');
+        if (!signal.aborted) {
+          console.error('Failed to load file diff:', e);
+          setDiffError('Error loading diff');
+        }
       } finally {
-        setLoadingDiff(false);
+        if (!signal.aborted) {
+          setLoadingDiff(false);
+        }
       }
     }
     setOpen(v => !v);

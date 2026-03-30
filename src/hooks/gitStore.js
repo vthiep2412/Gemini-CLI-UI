@@ -129,13 +129,14 @@ export const useGitStore = create((set, get) => ({
     } catch (_) {}
   },
 
-  fetchFileDiff: async (filePath) => {
+  fetchFileDiff: async (filePath, signal) => {
     const { selectedProject } = get();
     if (!selectedProject) return;
     const projAtStart = selectedProject.name;
     try {
       const res = await authenticatedFetch(
-        `/api/git/diff?project=${encodeURIComponent(selectedProject.name)}&file=${encodeURIComponent(filePath)}`
+        `/api/git/diff?project=${encodeURIComponent(selectedProject.name)}&file=${encodeURIComponent(filePath)}`,
+        { signal }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
@@ -144,7 +145,11 @@ export const useGitStore = create((set, get) => ({
       if (!data.error && get().selectedProject?.name === projAtStart) {
         set(s => ({ gitDiff: { ...s.gitDiff, [filePath]: { original: data.originalContent, modified: data.modifiedContent } } }));
       }
-    } catch (_) {}
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('fetchFileDiff failed:', e);
+      }
+    }
   },
 
   // ── Commit graph ─────────────────────────────────────────────────────────

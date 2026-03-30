@@ -59,12 +59,12 @@ const LIGHT_STATUS_CONFIG = STATUS_CONFIG(false);
 export default function FileRow({ filePath, status, mode = 'changes', section, isFocused, commitHash, oldPath }) {
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const confirmTimeoutRef = React.useRef(null);
   const rowRef = React.useRef(null);
   const [commitFileDiff, setCommitFileDiff] = useState(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState(null);
   const [isSideBySide, setIsSideBySide] = useState(null);
+  const abortControllerRef = React.useRef(null);
   const selectedProject = useGitStore(state => state.selectedProject);
 
   useEffect(() => {
@@ -75,13 +75,10 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
   }, [isFocused]);
 
   useEffect(() => {
-    if (confirming) {
-      confirmTimeoutRef.current = setTimeout(() => setConfirming(false), 3000);
-      return () => {
-        if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
-      };
-    }
-  }, [confirming]);
+    return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
 
   const { isDarkMode } = useTheme();
   const { gitDiff, discardFile, fetchFileDiff, stageFiles, unstageFiles } = useGitStore(
@@ -99,25 +96,44 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
 
   const handleExpand = async () => {
     if (!expanded) {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const { signal } = controller;
+
       if (mode === 'commit-view' && !commitFileDiff && commitHash && selectedProject) {
         setDiffLoading(true);
         setDiffError(null);
         try {
-          const res = await authenticatedFetch(`/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(filePath)}&oldPath=${encodeURIComponent(oldPath || filePath)}`);
-          if (res.ok) {
-            const data = await res.json();
+          const res = await authenticatedFetch(
+            `/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(filePath)}&oldPath=${encodeURIComponent(oldPath || filePath)}`,
+            { signal }
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const data = await res.json();
+          if (!signal.aborted) {
             setCommitFileDiff({ original: data.originalContent, modified: data.modifiedContent });
-          } else {
-             setDiffError('Failed to load diff');
           }
         } catch (e) {
-          console.error('Failed to load file diff:', e);
-          setDiffError('Error loading diff');
+          if (!signal.aborted) {
+            console.error('Failed to load file diff:', e);
+            setDiffError('Failed to load diff');
+          }
         } finally {
-          setDiffLoading(false);
+          if (!signal.aborted) setDiffLoading(false);
         }
       } else if (!diff && mode !== 'commit-view') {
-        fetchFileDiff(filePath);
+        setDiffLoading(true);
+        setDiffError(null);
+        try {
+          await fetchFileDiff(filePath, signal);
+        } catch (err) {
+          if (!signal.aborted) {
+            setDiffError('Failed to load diff');
+          }
+        } finally {
+          if (!signal.aborted) setDiffLoading(false);
+        }
       }
     }
     setExpanded(v => !v);
