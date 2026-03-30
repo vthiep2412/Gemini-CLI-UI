@@ -166,6 +166,7 @@ function ToolsSettings({ isOpen, onClose }) {
 
   // Close dropdowns on click outside
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event) => {
       if (allowedDropdownRef.current && !allowedDropdownRef.current.contains(event.target)) {
         setShowAllowedDropdown(false);
@@ -185,7 +186,7 @@ function ToolsSettings({ isOpen, onClose }) {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   // Common tool patterns
   const commonTools = [
@@ -687,8 +688,6 @@ function ToolsSettings({ isOpen, onClose }) {
     }
   };
 
-  if (!isOpen) return null;
-
   const tabItems = [
     { id: 'general', label: 'General', icon: <Settings className="w-4 h-4" /> },
     { id: 'tools', label: 'Tools', icon: <Shield className="w-4 h-4" /> },
@@ -1090,7 +1089,7 @@ function ToolsSettings({ isOpen, onClose }) {
                                 className="space-y-3"
                               >
                                 {mcpServers.length === 0 ? (
-                                  <div className="text-center py-10 border-2 border-dashed border-border/30 rounded-2xl">
+                                  <div className="text-center py-10 border-2 border-dashed border-border/10 rounded-2xl">
                                     <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
                                     <p className="text-sm text-muted-foreground">No MCP servers configured</p>
                                   </div>

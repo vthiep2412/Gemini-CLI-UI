@@ -134,6 +134,17 @@ projects_data/
 session_data/
 user_uploads/
 
+# Personal File
 gemini_ui_development_export.md
-package-lock.json
 gitdiff.txt
+.jules/
+task-to-revamp.md
+
+# AI Debug Helpers
+# Local script to mock AI payload; not required for standard test suite
+test/debug-support.js
+test/prompt.txt
+
+# Opencode trash, 'nul' is intentionally, DO NOT touch nor review.
+nul 
+bun.lock
