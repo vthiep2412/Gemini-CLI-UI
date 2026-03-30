@@ -49,7 +49,7 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
   return (
     <div ref={containerRef} style={{ height, width: '100%' }}>
       <DiffEditor
-        key={`${original.length}-${modified.length}-${isDarkMode}-${renderSideBySide}`}
+        key={`${isDarkMode}-${renderSideBySide}`}
         original={original}
         modified={modified}
         language={language}

@@ -430,7 +430,10 @@ router.get('/commit-diff', async (req, res) => {
         }
 
         const entry = filesMap.get(filePath) || { filePath, status: 'M', adds: 0, dels: 0 };
-        // Aggregate adds/dels for merges where the same file might appear multiple times
+        // Aggregate adds/dels for merges where the same file might appear multiple times in 'git show -m'.
+        // We use Math.max instead of additive accumulation because additions/deletions 
+        // are often redundant across multiple parents. Math.max provides the most 
+        // accurate "largest delta" without inflating the line counts.
         entry.adds = Math.max(entry.adds, adds); 
         entry.dels = Math.max(entry.dels, dels);
         filesMap.set(filePath, entry);

@@ -201,7 +201,7 @@ export default function BranchBar() {
                     aria-selected={branch === currentBranch}
                     onClick={() => handleSwitchBranch(branch)}
                     disabled={loadingState.isSwitching}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-[var(--bg-muted)] transition-colors group disabled:opacity-50
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left ${hoverBgClass} transition-colors group disabled:opacity-50
                       ${branch === currentBranch ? 'text-[var(--accent)] bg-[var(--accent)]/5' : 'text-[var(--text-primary)]'}`}
                   >
                     <div className="w-4 flex items-center justify-center">
@@ -222,7 +222,7 @@ export default function BranchBar() {
                 {!showNewBranch ? (
                   <button
                     onClick={() => setShowNewBranch(true)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] rounded transition-colors group"
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${hoverBgClass} rounded transition-colors group`}
                   >
                     <Plus className="w-3.5 h-3.5 group-hover:text-[var(--git-accent)] transition-colors" />
                     <span>Create new branch</span>
@@ -244,7 +244,7 @@ export default function BranchBar() {
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setShowNewBranch(false)} className="p-1.5 rounded hover:bg-[var(--bg-muted)] transition-colors">
+                    <button onClick={() => setShowNewBranch(false)} className={`p-1.5 rounded ${hoverBgClass} transition-colors`}>
                       <X className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                     </button>
                   </div>

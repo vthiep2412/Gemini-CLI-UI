@@ -179,9 +179,7 @@ The UI automatically discovers Gemini CLI projects from `~/.gemini/projects/` an
 ### Frontend (React + Vite)
 
 - **React 18** - Modern component architecture with hooks
-- **Monaco Editor** - Used specifically for high-fidelity Side-by-Side Git Diff viewing
-- **[Monaco Editor](https://microsoft.github.io/monaco-editor/)** - VS Code's editor for Git diffs
-- **Tailwind CSS** - Utility-first CSS framework
+- **[Monaco Editor](https://microsoft.github.io/monaco-editor/)** - VS Code's editor for high-fidelity Git diffs and side-by-side viewing- **Tailwind CSS** - Utility-first CSS framework
 - **Responsive Design** - Mobile-first approach
 
 ## Configuration Details

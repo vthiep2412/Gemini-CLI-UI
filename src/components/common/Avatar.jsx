@@ -9,13 +9,13 @@ import React from 'react';
 function Avatar({ name, className = "" }) {
   const initial = (name || '?').charAt(0).toUpperCase();
   // Assume the first part of the 'name' might be the github username or close to it
-  const username = (name || '').split(' ')[0].toLowerCase().trim();
+  const username = (name || '').split(' ')[0].toLowerCase().trim() || null;
 
   return (
     <div className={`w-8 h-8 rounded overflow-hidden bg-[var(--git-accent,theme(colors.blue.600))]/20 text-[var(--git-accent,theme(colors.blue.600))] flex items-center justify-center font-bold text-[14px] flex-shrink-0 relative group/avatar ${className}`}>
       <img
         src={`https://github.com/${username}.png`}
-        alt={name}
+        alt={name || 'User avatar'}
         className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
         onError={(e) => {
           e.target.style.opacity = '0';

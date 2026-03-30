@@ -120,7 +120,9 @@ export default function CommitInput() {
             flex-1 min-h-[60px] overflow-y-auto custom-scrollbar shadow-sm
             ${isDarkMode 
               ? 'bg-white/10 border-white/5 focus:bg-white/20 focus:border-[var(--git-accent)]/30' 
-              : 'bg-white border-slate-200 focus:border-[var(--git-accent)]/50 focus:ring-1 focus:ring-[var(--git-accent)]/10'}`}        />
+              : 'bg-white border-slate-200 focus:border-[var(--git-accent)]/50 focus:ring-1 focus:ring-[var(--git-accent)]/10'
+            }`}
+        />
       </div>
 
       {/* Action buttons */}

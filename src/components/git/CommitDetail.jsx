@@ -43,12 +43,12 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
   const [open, setOpen] = useState(false);
   const [isUnified, setIsUnified] = useState(null);
   
-  const STATUS_CONFIG = { 
+  const STATUS_CONFIG = useMemo(() => ({ 
     M: isDarkMode ? 'bg-yellow-500/20 text-yellow-500' : 'bg-amber-500 text-white border border-amber-600/30', 
     A: isDarkMode ? 'bg-green-500/20 text-green-500'  : 'bg-emerald-500 text-white border border-emerald-600/30', 
     D: isDarkMode ? 'bg-red-500/20 text-red-500'    : 'bg-rose-500 text-white border border-rose-600/30', 
     R: isDarkMode ? 'bg-blue-500/20 text-blue-400'   : 'bg-blue-500 text-white border border-blue-600/30' 
-  };
+  }), [isDarkMode]);
 
   const handleExpand = async () => {
     if (!open && !diffData && commitHash && selectedProject) {
@@ -78,18 +78,11 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
 
   return (
     <div className="border-b border-border/30 last:border-0">
-      <div
+      <button
+        type="button"
         className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs cursor-pointer transition-all
           ${open ? 'bg-[var(--bg-muted)]/40' : ''}`}
         onClick={handleExpand}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleExpand();
-          }
-        }}
-        role="button"
-        tabIndex={0}
       >
         <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded shadow-sm ${STATUS_CONFIG[file.status] || ''}`}>
           {file.status}
@@ -122,7 +115,7 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
-      </div>
+      </button>
 
       <AnimatePresence initial={false}>
         {open && (

@@ -1088,7 +1088,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
       let i = 0, j = 0;
       while (i < oldLines.length || j < newLines.length) {
         if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
-          diff.push({ type: 'equal', content: oldLines[i] });
+          // Skip equal lines - only show changes in diff view
           i++; j++;
         } else if (i < oldLines.length && (j >= newLines.length || oldLines[i] !== newLines[j])) {
           diff.push({ type: 'removed', content: oldLines[i] });

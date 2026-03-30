@@ -137,7 +137,7 @@ export default function FileTree() {
         {commitFiles.length === 0 && (
           <div className="p-8 text-xs text-[var(--text-secondary)] font-mono text-center">
             {error?.action === 'commit-diff' ? (
-              <span className="text-red-500 font-bold uppercase tracking-widest">{error.message || 'Failed to load diff'}</span>
+              <span className="text-[var(--error,#ef4444)] font-bold uppercase tracking-widest">{error.message || 'Failed to load diff'}</span>
             ) : commitDiff === null ? (
               'Loading diff…'
             ) : (
