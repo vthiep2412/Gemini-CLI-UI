@@ -9,6 +9,16 @@ import { cn } from '../lib/utils';
 import GeminiLogo from './GeminiLogo';
 import { api } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCurrentTime } from '../hooks/useCurrentTime';
+
+const SessionTimeTracker = React.memo(({ session, children }) => {
+  const currentTime = useCurrentTime();
+  const sessionDate = new Date(session.lastActivity);
+  const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
+  const isActive = diffInMinutes < 10;
+
+  return children(isActive, currentTime);
+});
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -62,7 +72,6 @@ function Sidebar({
   const [loadingSessions, setLoadingSessions] = useState({});
   const [additionalSessions, setAdditionalSessions] = useState({});
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState(new Set());
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [projectSortOrder, setProjectSortOrder] = useState('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
@@ -94,15 +103,6 @@ function Sidebar({
       callback();
     };
   };
-
-  // Auto-update timestamps every minute
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 60000); // Update every 60 seconds
-
-    return () => clearInterval(timer);
-  }, []);
 
   // Clear additional sessions when projects list changes (e.g., after refresh)
   useEffect(() => {
@@ -1007,14 +1007,10 @@ function Sidebar({
                           <p className="text-xs text-muted-foreground">No sessions yet</p>
                         </div>
                       ) : (
-                        getAllSessions(project).map((session) => {
-                          // Calculate if session is active (within last 10 minutes)
-                          const sessionDate = new Date(session.lastActivity);
-                          const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
-                          const isActive = diffInMinutes < 10;
-                          
-                          return (
-                          <div key={session.id} className="group relative">
+                        getAllSessions(project).map((session) => (
+                          <SessionTimeTracker key={session.id} session={session}>
+                            {(isActive, currentTime) => (
+                          <div className="group relative">
                             {/* Active session indicator dot */}
                             {isActive && (
                               <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
@@ -1199,8 +1195,9 @@ function Sidebar({
                               </div>
                             </div>
                           </div>
-                          );
-                        })
+                            )}
+                          </SessionTimeTracker>
+                        ))
                       )}
 
                       {/* Show More Sessions Button */}
