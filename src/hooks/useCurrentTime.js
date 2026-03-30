@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 const subscribers = new Set();
 let intervalId = null;
 
-export const useCurrentTime = (updateInterval = 60000) => {
+export const useCurrentTime = () => {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -13,7 +13,7 @@ export const useCurrentTime = (updateInterval = 60000) => {
       intervalId = setInterval(() => {
         const now = new Date();
         subscribers.forEach(cb => cb(now));
-      }, updateInterval);
+      }, 60000);
     }
 
     return () => {
@@ -23,7 +23,7 @@ export const useCurrentTime = (updateInterval = 60000) => {
         intervalId = null;
       }
     };
-  }, [updateInterval]);
+  }, []);
 
   return time;
 };

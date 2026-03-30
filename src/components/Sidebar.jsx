@@ -19,6 +19,7 @@ const SessionTimeTracker = React.memo(({ session, children }) => {
 
   return children(isActive, currentTime);
 });
+SessionTimeTracker.displayName = 'SessionTimeTracker';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
