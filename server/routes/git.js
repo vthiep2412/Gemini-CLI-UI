@@ -131,6 +131,12 @@ router.get('/diff', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+
     // Validate git repository
     await validateGitRepository(projectPath);
     
@@ -138,72 +144,31 @@ router.get('/diff', async (req, res) => {
     const { stdout: statusOutput } = await execFileAsync('git', ['status', '--porcelain', file], { cwd: projectPath });
     const isUntracked = statusOutput.startsWith('??');
     
-    let diff;
+    let originalContent = '';
+    let modifiedContent = '';
+
     if (isUntracked) {
-      // For untracked files, show the entire file content as additions
-      const fileContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
-      const lines = fileContent.split('\n');
-      diff = `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n` + 
-             lines.map(line => `+${line}`).join('\n');
+      // For untracked files, original is empty, modified is the current content
+      modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
     } else {
-      // Get diff for tracked files
-      const { stdout } = await execFileAsync('git', ['diff', 'HEAD', '--', file], { cwd: projectPath });
-      diff = stdout || '';
-      
-      // If no unstaged changes, check for staged changes
-      if (!diff) {
-        const { stdout: stagedDiff } = await execFileAsync('git', ['diff', '--cached', '--', file], { cwd: projectPath });
-        diff = stagedDiff;
+      try {
+        modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
+      } catch (e) {
+        // File might be deleted
+      }
+
+      try {
+        // Try getting from HEAD first
+        const { stdout: originalOut } = await execFileAsync('git', ['show', `HEAD:${file}`], { cwd: projectPath });
+        originalContent = originalOut;
+      } catch (e) {
+        // If file is new and staged, original might not exist in HEAD
       }
     }
     
-    res.json({ diff });
+    res.json({ originalContent, modifiedContent });
   } catch (error) {
     // console.error('Git diff error:', error);
-    res.json({ error: error.message });
-  }
-});
-
-// Commit changes
-router.post('/commit', async (req, res) => {
-  const { project, message, files } = req.body;
-  
-  if (!project || !message) {
-    return res.status(400).json({ error: 'Project name and commit message are required' });
-  }
-
-  try {
-    const projectPath = await getActualProjectPath(project);
-    
-    // Validate git repository
-    await validateGitRepository(projectPath);
-    
-    // Stage explicitly requested files, if any are provided
-    if (files && Array.isArray(files) && files.length > 0) {
-      for (const file of files) {
-        const resolvedPath = path.resolve(projectPath, file);
-        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
-          return res.status(400).json({ error: `Invalid file path: ${file}` });
-        }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
-      }
-    }
-    
-    // Check if there are any staged changes to commit
-    try {
-      await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
-      // If success (exit code 0), no changes are staged
-      return res.status(400).json({ error: 'No staged changes to commit' });
-    } catch (e) {
-      // Exit code 1 means there are staged changes, which is what we want
-    }
-    
-    // Commit with message
-    const { stdout } = await execFileAsync('git', ['commit', '-m', message], { cwd: projectPath });
-    
-    res.json({ success: true, output: stdout });
-  } catch (error) {
-    // console.error('Git commit error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -355,6 +320,50 @@ router.get('/commits', async (req, res) => {
 });
 
 // Get diff for a specific commit
+
+router.post('/commit', async (req, res) => {
+  const { project, message, files } = req.body;
+
+  if (!project || !message) {
+    return res.status(400).json({ error: 'Project name and commit message are required' });
+  }
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+
+    // Validate git repository
+    await validateGitRepository(projectPath);
+
+    // Stage explicitly requested files, if any are provided
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const resolvedPath = path.resolve(projectPath, file);
+        if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+          return res.status(400).json({ error: `Invalid file path: ${file}` });
+        }
+        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+      }
+    }
+
+    // Check if there are any staged changes to commit
+    try {
+      await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
+      // If success (exit code 0), no changes are staged
+      return res.status(400).json({ error: 'No staged changes to commit' });
+    } catch (e) {
+      // Exit code 1 means there are staged changes, which is what we want
+    }
+
+    // Commit with message
+    const { stdout } = await execFileAsync('git', ['commit', '-m', message], { cwd: projectPath });
+
+    res.json({ success: true, output: stdout });
+  } catch (error) {
+    // console.error('Git commit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/commit-diff', async (req, res) => {
   const { project, commit } = req.query;
   
@@ -364,18 +373,133 @@ router.get('/commit-diff', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
-    // Get diff for the commit (using -m and --first-parent to handle merge commits properly)
+    await validateGitRepository(projectPath);
+    // Get diff stats for the commit with -m to support merge commits
     const { stdout } = await execFileAsync(
       'git',
-      ['show', '--patch', '-m', '--first-parent', '--format=%b', commit],
+      ['show', '-m', '--numstat', '--name-status', '--oneline', '-M', commit],
       { cwd: projectPath }
     );
     
-    res.json({ diff: stdout });
+    const lines = stdout.split('\n');
+    const filesMap = new Map();
+
+    // The first line is usually the oneline header. 
+    // However, -m for a merge commit can produce MULTIPLE headers if git show is run naively.
+    // We'll iterate through all lines and detect patterns.
+    
+    for (const line of lines) {
+      if (!line) continue;
+      const parts = line.split('\t');
+
+      // 1. Detect Name-Status lines: <Status>[\t<oldPath>]\t<filePath>
+      // Status can be single (M, A, D) or multi (MM, AA) for merges
+      if (parts.length >= 2 && /^[A-Z]{1,2}[0-9]*$/.test(parts[0])) {
+        const statusRaw = parts[0];
+        const status = statusRaw[0]; // Take primary status character
+        let filePath = parts[parts.length - 1]; // Usually the last part
+        let oldPath = status === 'R' ? parts[1] : null;
+
+        if (!filesMap.has(filePath)) {
+          filesMap.set(filePath, { filePath, status, oldPath, adds: 0, dels: 0 });
+        } else {
+          // If already exists (e.g. from a previous parent diff in -m), update status if needed
+          const existing = filesMap.get(filePath);
+          existing.status = status;
+          if (oldPath) existing.oldPath = oldPath;
+        }
+      }
+
+      // 2. Detect Numstat lines: <adds>\t<dels>\t<filePath>
+      if (parts.length >= 3 && /^[0-9-]+$/.test(parts[0]) && /^[0-9-]+$/.test(parts[1])) {
+        const adds = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
+        const dels = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
+        let filePath = parts[2];
+
+        // Handle rename syntax in numstat: "dir/{old => new}" or "old => new"
+        if (filePath.includes(' => ')) {
+          // Simplistic extraction of the "new" part
+          // e.g. "src/{old.js => new.js}" -> "src/new.js"
+          const match = filePath.match(/^(.*)\{(.*) => (.*)\}(.*)$/);
+          if (match) {
+            filePath = (match[1] + match[3] + match[4]).replace(/\/\//g, '/');
+          } else {
+            const simpleMatch = filePath.match(/^(.*) => (.*)$/);
+            if (simpleMatch) filePath = simpleMatch[2];
+          }
+        }
+
+        const entry = filesMap.get(filePath) || { filePath, status: 'M', adds: 0, dels: 0 };
+        // Aggregate adds/dels for merges where the same file might appear multiple times in 'git show -m'.
+        // We use Math.max instead of additive accumulation because additions/deletions 
+        // are often redundant across multiple parents. Math.max provides the most 
+        // accurate "largest delta" without inflating the line counts.
+        entry.adds = Math.max(entry.adds, adds); 
+        entry.dels = Math.max(entry.dels, dels);
+        filesMap.set(filePath, entry);
+      }
+    }
+
+    const files = Array.from(filesMap.values());
+    res.json({ files });
   } catch (error) {
     // console.error('Git commit diff error:', error);
     res.json({ error: error.message });
+  }
+});
+
+router.get('/commit-file-diff', async (req, res) => {
+  const { project, commit, file, oldPath } = req.query;
+
+  if (!project || !commit || !file) {
+    return res.status(400).json({ error: 'Project name, commit hash, and file path are required' });
+  }
+
+  try {
+    const projectPath = await getActualProjectPath(project);
+
+    // Validate file path to prevent path traversal
+    const resolvedPath = path.resolve(projectPath, file);
+    if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
+      return res.status(400).json({ error: `Invalid file path: ${file}` });
+    }
+    if (oldPath) {
+      const resolvedOldPath = path.resolve(projectPath, oldPath);
+      if (!resolvedOldPath.startsWith(path.resolve(projectPath) + path.sep)) {
+        return res.status(400).json({ error: `Invalid old file path: ${oldPath}` });
+      }
+    }
+
+    // Validate commit reference to prevent command injection or misinterpretation
+    if (!/^[a-zA-Z0-9_\-\.\^~\/@{}]+$/.test(commit)) {
+      return res.status(400).json({ error: 'Invalid commit reference' });
+    }
+
+    let originalContent = '';
+    let modifiedContent = '';
+
+    // Get modified content (content at the commit)
+    try {
+      // Use the 'commit:file' syntax to get the raw content of the file at that specific commit
+      const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], { cwd: projectPath });
+      modifiedContent = stdout;
+    } catch (e) {
+      // File might have been deleted in this commit or not exist in this version
+    }
+
+    // Get original content (content at the parent commit)
+    try {
+      const parentPath = oldPath || file;
+      // Use the 'commit^1:file' syntax to get raw content from the parent commit
+      const { stdout } = await execFileAsync('git', ['show', `${commit}^1:${parentPath}`], { cwd: projectPath });
+      originalContent = stdout;
+    } catch (e) {
+      // File might be new in this commit, or parent might not have it
+    }
+
+    res.json({ originalContent, modifiedContent });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -1,32 +1,15 @@
-/**
- * CommitDetail.jsx — Full commit inspection panel shown in the left pane
- * when a graph node is clicked. Replaces the FileTree+CommitInput.
- *
- * Shows: metadata header + per-file change list with expandable code diffs.
- * Optimized for performance using React memo and standard CSS-based scroll.
- */
-import React, { useMemo, useState, memo } from 'react';
-import { X, Calendar, User, Hash, FileText, ChevronRight, ChevronDown, Copy, ExternalLink, ArrowLeft, GitCommit } from 'lucide-react';
-import Tooltip from '../common/Tooltip';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, Copy, AlignLeft, ArrowLeftRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+import Tooltip from '../common/Tooltip';
+
 import { useGitStore } from '../../hooks/gitStore';
+import MonacoDiffViewer from '../common/MonacoDiffViewer';
+import { useTheme } from '../../contexts/ThemeContext';
+import { authenticatedFetch } from '../../utils/api';
+import Avatar from '../common/Avatar';
 
-function Avatar({ name }) {
-  const initials = name ? name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase() || '?' : '?';
-  const hue = (name || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
-  return (
-    <div
-      className="w-8 h-8 rounded-full flex items-center justify-center text-[.75rem] font-bold text-white flex-shrink-0"
-      style={{ background: `hsl(${hue}, 55%, 45%)` }}
-    >
-      {initials}
-    </div>
-  );
-}
-
-/**
- * Modern clipboard helper that returns success status.
- */
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -34,7 +17,6 @@ async function copyToClipboard(text) {
       await navigator.clipboard.writeText(text);
       return true;
     } else {
-      // Fallback for non-secure contexts if needed
       const textArea = document.createElement("textarea");
       textArea.value = text;
       textArea.style.position = "fixed";
@@ -53,114 +35,59 @@ async function copyToClipboard(text) {
   }
 }
 
-/**
- * Robustly parse unified diff into per-file chunks
- */
-function parseFilesFromDiff(diffStr) {
-  if (!diffStr) return [];
-  const files = [];
-  let current = null;
+function FileDiffRow({ file, commitHash, selectedProject }) {
+  const { isDarkMode } = useTheme();
+  const [diffData, setDiffData] = useState(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const [diffError, setDiffError] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [isUnified, setIsUnified] = useState(null);
+  const abortControllerRef = useRef(null);
 
-  diffStr.replace(/\r\n/g, '\n').split('\n').forEach(line => {
-    if (line.startsWith('diff --git ')) {
-      if (current) { 
-        current.diff = current._lines.join('\n'); 
-        delete current._lines; 
-        files.push(current); 
-      }
-      
-      let filePath = '?';
-      // Format: "diff --git a/<path> b/<path>"
-      const match = line.match(/^diff --git a\/(.*?) b\/(.*)$/);
-      if (match) {
-        filePath = match[2].trim();
-        if (filePath.startsWith('"') && filePath.endsWith('"')) {
-          filePath = filePath.slice(1, -1);
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
+  
+  const STATUS_CONFIG = useMemo(() => ({ 
+    M: isDarkMode ? 'bg-yellow-500/20 text-yellow-500' : 'bg-amber-500 text-white border border-amber-600/30', 
+    A: isDarkMode ? 'bg-green-500/20 text-green-500'  : 'bg-emerald-500 text-white border border-emerald-600/30', 
+    D: isDarkMode ? 'bg-red-500/20 text-red-500'    : 'bg-rose-500 text-white border border-rose-600/30', 
+    R: isDarkMode ? 'bg-blue-500/20 text-blue-400'   : 'bg-blue-500 text-white border border-blue-600/30' 
+  }), [isDarkMode]);
+
+  const handleExpand = async () => {
+    if (!open && !diffData && commitHash && selectedProject) {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const { signal } = controller;
+
+      setLoadingDiff(true);
+      setDiffError(null);
+      try {
+        const res = await authenticatedFetch(
+          `/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(file.filePath)}&oldPath=${encodeURIComponent(file.oldPath || file.filePath)}`,
+          { signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const data = await res.json();
+        if (!signal.aborted) {
+          setDiffData(data);
+        }
+      } catch (e) {
+        if (!signal.aborted) {
+          console.error('Failed to load file diff:', e);
+          setDiffError('Error loading diff');
+        }
+      } finally {
+        if (!signal.aborted) {
+          setLoadingDiff(false);
         }
       }
-      
-      current = { 
-        filePath, 
-        status: 'M', 
-        adds: 0, 
-        dels: 0, 
-        _lines: [] 
-      };
-    } else if (current) {
-      if (line.startsWith('new file')) current.status = 'A';
-      else if (line.startsWith('deleted file')) current.status = 'D';
-      else if (line.startsWith('rename to')) current.status = 'R';
-      else if (line.startsWith('+') && !line.startsWith('+++')) current.adds++;
-      else if (line.startsWith('-') && !line.startsWith('---')) current.dels++;
-      current._lines.push(line);
     }
-  });
-
-  if (current) { 
-    current.diff = current._lines.join('\n'); 
-    delete current._lines; 
-    files.push(current); 
-  }
-  return files;
-}
-
-/**
- * Highly optimized diff line row.
- * Memoized to prevent re-renders when the sidebar or parent scroll happens.
- */
-const DiffLine = memo(({ line, wrap }) => {
-  if (!line) return null;
-
-  const isAdd = line.startsWith('+') && !line.startsWith('+++');
-  const isDel = line.startsWith('-') && !line.startsWith('---');
-  const isHunk = line.startsWith('@@');
-  
-  return (
-    <div 
-      className={`flex min-w-0 transition-colors border-l-2 ${
-        isAdd ? 'bg-green-500/10 text-green-500 border-green-500' : 
-        isDel ? 'bg-red-500/10 text-red-500 border-red-500' : 
-        isHunk ? 'bg-[var(--accent)]/10 text-[var(--accent)] font-bold border-[var(--accent)]' : 
-        'text-[var(--text-secondary)] opacity-80 border-transparent'}`}
-    >
-      <span className="select-none w-9 text-center flex-shrink-0 opacity-40 mr-2 text-[10px] font-mono leading-[22px]">
-        {isAdd ? '+' : isDel ? '-' : ' '}
-      </span>
-      <span className={`flex-1 px-1 font-mono text-[11px] leading-[22px] ${wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'}`}>
-        {line.slice(1) || ' '}
-      </span>
-    </div>
-  );
-});
-
-/**
- * Viewer for a single file's diff lines.
- * Replaces react-window with a fast, stable standard list.
- */
-function FileDiffViewer({ diff, wrap }) {
-  const lines = useMemo(() => (diff || '').split('\n'), [diff]);
-
-  return (
-    <div className="flex flex-col">
-      {lines.map((l, i) => (
-        <DiffLine key={i} line={l} wrap={wrap} />
-      ))}
-    </div>
-  );
-}
-
-/**
- * Expandable row for a single file in the commit
- */
-function FileDiffRow({ file }) {
-  const [open, setOpen] = useState(false);
-  const [wrap, setWrap] = useState(true);
-  
-  const STATUS_CONFIG = { 
-    M: 'bg-yellow-500/20 text-yellow-500', 
-    A: 'bg-green-500/20 text-green-500', 
-    D: 'bg-red-500/20 text-red-500', 
-    R: 'bg-blue-500/20 text-blue-400' 
+    setOpen(v => !v);
   };
 
   const parts = file.filePath.replace(/\\/g, '/').split('/');
@@ -170,9 +97,10 @@ function FileDiffRow({ file }) {
   return (
     <div className="border-b border-border/30 last:border-0">
       <button
-        className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs transition-all
+        type="button"
+        className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs cursor-pointer transition-all
           ${open ? 'bg-[var(--bg-muted)]/40' : ''}`}
-        onClick={() => setOpen(v => !v)}
+        onClick={handleExpand}
       >
         <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded shadow-sm ${STATUS_CONFIG[file.status] || ''}`}>
           {file.status}
@@ -184,7 +112,24 @@ function FileDiffRow({ file }) {
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {file.adds > 0 && <span className="text-green-500/80 text-[12px] font-mono font-bold">+{file.adds}</span>}
           {file.dels > 0 && <span className="text-red-500/80 text-[12px] font-mono font-bold">-{file.dels}</span>}
-          <div className={`ml-2 transition-transform duration-300 ${open ? 'rotate-90 text-[var(--git-accent)]' : 'opacity-40'}`}>
+          
+          <Tooltip label={isUnified === null ? 'Toggle View Mode' : isUnified ? 'Switch to Split View' : 'Switch to Unified View'}>
+            <button
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                // If it's currently null, it means we're in auto mode. Let's force it to unified on first click
+                // Or try to toggle from the standard wider default.
+                setIsUnified(prev => prev === null ? true : !prev); 
+              }}
+              className={`p-1.5 rounded transition-all ml-1 flex items-center justify-center
+                ${isDarkMode ? 'hover:bg-white/10 text-white/40 hover:text-white/80' : 'hover:bg-slate-200 text-slate-400 hover:text-slate-700'}`}
+            >
+              {/* Show the icon for the state it will switch TO */}
+              {isUnified === true ? <ArrowLeftRight size={13} /> : <AlignLeft size={13} />}
+            </button>
+          </Tooltip>
+
+          <div className={`ml-1 transition-transform duration-300 ${open ? 'rotate-90 text-[var(--git-accent)]' : 'opacity-40'}`}>
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
@@ -197,20 +142,27 @@ function FileDiffRow({ file }) {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
-            className="overflow-hidden bg-[var(--bg-base)]/30"
+            className={`overflow-hidden ${isDarkMode ? 'bg-[var(--bg-base)]/30' : 'bg-slate-50'}`}
           >
             <div className="border-t border-border/40">
-              <div className="flex items-center justify-between px-4 py-2 bg-[var(--bg-surface)]/10 border-b border-border/20">
+              <div className={`flex items-center justify-between px-4 py-2 border-b border-border/20 ${isDarkMode ? 'bg-[var(--bg-surface)]/10' : 'bg-white'}`}>
                 <span className="text-[9px] text-[var(--text-secondary)] font-mono truncate opacity-60 tracking-wider uppercase">{file.filePath}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setWrap(v => !v); }}
-                  className="text-[9px] font-bold text-[var(--text-secondary)] hover:text-[var(--git-accent)] transition-colors flex items-center gap-1 uppercase tracking-tighter"
-                >
-                  {wrap ? 'Disable Wrap' : 'Enable Wrap'}
-                </button>
               </div>
-              <div className="overflow-auto max-h-[500px] scrollbar-none shadow-inner">
-                <FileDiffViewer diff={file.diff} wrap={wrap} />
+              <div className="overflow-hidden shadow-inner">
+                {loadingDiff ? (
+                  <div className="p-4 text-center text-xs text-[var(--text-secondary)] animate-pulse">Loading diff...</div>
+                ) : diffError ? (
+                  <div className="p-4 text-center text-xs text-red-500 font-mono">{diffError}</div>
+                ) : diffData ? (
+                  <MonacoDiffViewer
+                    original={diffData.originalContent || ''}
+                    modified={diffData.modifiedContent || ''}
+                    height="400px"
+                    renderSideBySide={isUnified === null ? undefined : !isUnified}
+                  />
+                ) : (
+                  <div className="p-4 text-center text-xs text-[var(--text-secondary)]">No diff available</div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -220,21 +172,20 @@ function FileDiffRow({ file }) {
   );
 }
 
-/**
- * Main Commit Detail Panel
- */
 export default function CommitDetail() {
   const [msgExpanded, setMsgExpanded] = useState(false);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const commitDiff = useGitStore(s => s.commitDiff);
   const graphLayout = useGitStore(s => s.graphLayout);
+  const error = useGitStore(s => s.error);
+  const selectedProject = useGitStore(s => s.selectedProject);
 
   const commitMeta = useMemo(
     () => graphLayout?.find(c => c.hash === selectedCommit) ?? null,
     [graphLayout, selectedCommit]
   );
 
-  const files = useMemo(() => parseFilesFromDiff(commitDiff), [commitDiff]);
+  const files = useMemo(() => commitDiff?.files || [], [commitDiff]);
 
   const { totalAdds, totalDels } = useMemo(() => ({
     totalAdds: files.reduce((a, f) => a + f.adds, 0),
@@ -312,7 +263,12 @@ export default function CommitDetail() {
 
       {/* File List */}
       <div className="flex-1 overflow-y-auto min-h-0 scrollbar-none">
-        {commitDiff === null ? (
+        {error?.action === 'commit-diff' ? (
+          <div className="h-40 flex flex-col items-center justify-center gap-2">
+            <div className="text-[10px] font-bold tracking-[0.2em] text-red-500 uppercase">Error loading commit</div>
+            <div className="text-[9px] text-[var(--text-secondary)] font-mono px-6 text-center">{error.message}</div>
+          </div>
+        ) : commitDiff === null ? (
           <div className="h-40 flex items-center justify-center">
             <div className="text-[10px] font-bold tracking-[0.2em] text-[var(--text-secondary)] uppercase animate-pulse opacity-40">Loading changes…</div>
           </div>
@@ -324,7 +280,7 @@ export default function CommitDetail() {
         ) : (
           <div className="pb-12">
             {files.map(f => (
-              <FileDiffRow key={f.filePath} file={f} />
+              <FileDiffRow key={`${selectedCommit}-${f.filePath}`} file={f} commitHash={selectedCommit} selectedProject={selectedProject} />
             ))}
           </div>
         )}

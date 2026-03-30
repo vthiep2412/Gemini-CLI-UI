@@ -21,7 +21,7 @@ export const useGitStore = create((set, get) => ({
   remoteStatus: null,         // { hasRemote, ahead, behind, isUpToDate, remoteName }
   stagedFiles: new Set(),     // Set<string> — files checked for staging
   selectedFiles: new Set(),   // Set<string> — tracks expanded/active files locally
-  gitDiff: {},                // { [filePath]: diffString }
+  gitDiff: {},                // { [filePath]: { original: string, modified: string } }
   graphData: [],              // raw commits from /api/git/graph
   graphLayout: [],            // computed by Web Worker
   graphTotal: 0,              // total commit count (for infinite scroll)
@@ -129,22 +129,27 @@ export const useGitStore = create((set, get) => ({
     } catch (_) {}
   },
 
-  fetchFileDiff: async (filePath) => {
+  fetchFileDiff: async (filePath, signal) => {
     const { selectedProject } = get();
     if (!selectedProject) return;
     const projAtStart = selectedProject.name;
     try {
       const res = await authenticatedFetch(
-        `/api/git/diff?project=${encodeURIComponent(selectedProject.name)}&file=${encodeURIComponent(filePath)}`
+        `/api/git/diff?project=${encodeURIComponent(selectedProject.name)}&file=${encodeURIComponent(filePath)}`,
+        { signal }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
       
       // Stale check: ensure project hasn't changed since we started fetching
       if (!data.error && get().selectedProject?.name === projAtStart) {
-        set(s => ({ gitDiff: { ...s.gitDiff, [filePath]: data.diff } }));
+        set(s => ({ gitDiff: { ...s.gitDiff, [filePath]: { original: data.originalContent, modified: data.modifiedContent } } }));
       }
-    } catch (_) {}
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('fetchFileDiff failed:', e);
+      }
+    }
   },
 
   // ── Commit graph ─────────────────────────────────────────────────────────
@@ -197,13 +202,13 @@ export const useGitStore = create((set, get) => ({
       const data = await res.json();
       
       if (data.error) {
-        set({ commitDiff: '' }); // Set to empty string instead of null to stop the loading spinner
+        set({ commitDiff: null });
         setError('commit-diff', data.error);
       } else {
-        set({ commitDiff: data.diff || '' });
+        set({ commitDiff: data });
       }
     } catch (e) {
-      set({ commitDiff: '' });
+      set({ commitDiff: null });
       setError('commit-diff', e.message);
     }
   },

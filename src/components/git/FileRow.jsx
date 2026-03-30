@@ -8,57 +8,64 @@ import { ChevronRight, ChevronDown, Check, Trash2, AlignLeft, ArrowLeftRight, Pl
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useShallow } from 'zustand/react/shallow';
+import { useTheme } from '../../contexts/ThemeContext';
 import Tooltip from '../common/Tooltip';
+import MonacoDiffViewer from '../common/MonacoDiffViewer';
+import { authenticatedFetch } from '../../utils/api';
 
-const STATUS_CONFIG = {
-  M: { label: 'Modified', bg: 'bg-yellow-500/20', text: 'text-yellow-500' },
-  A: { label: 'Added',    bg: 'bg-green-500/20',  text: 'text-green-500'  },
-  D: { label: 'Deleted',  bg: 'bg-red-500/20',    text: 'text-red-500'    },
-  U: { label: 'Untracked', bg: 'bg-green-500/20',  text: 'text-green-500'  },
-  '??': { label: 'Untracked', bg: 'bg-green-500/20', text: 'text-green-500' },
-  C: { label: 'Conflict', bg: 'bg-orange-500/20', text: 'text-orange-500' },
-  R: { label: 'Renamed',  bg: 'bg-blue-500/20',   text: 'text-blue-400'   },
-};
+const STATUS_CONFIG = (isDark) => ({
+  M: { label: 'Modified',  
+       bg: isDark ? 'bg-yellow-500/20' : 'bg-amber-500', 
+       text: isDark ? 'text-yellow-500' : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-amber-600/30' 
+     },
+  A: { label: 'Added',     
+       bg: isDark ? 'bg-green-500/20'  : 'bg-emerald-500', 
+       text: isDark ? 'text-green-500'  : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+     },
+  D: { label: 'Deleted',   
+       bg: isDark ? 'bg-red-500/20'    : 'bg-rose-500', 
+       text: isDark ? 'text-red-500'    : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-rose-600/30'
+     },
+  U: { label: 'Untracked', 
+       bg: isDark ? 'bg-green-500/20'  : 'bg-emerald-500', 
+       text: isDark ? 'text-green-500'  : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+     },
+  '??': { label: 'Untracked', 
+          bg: isDark ? 'bg-green-500/20' : 'bg-emerald-500', 
+          text: isDark ? 'text-green-500' : 'text-white',
+          border: isDark ? 'border-transparent' : 'border border-emerald-600/30'
+        },
+  C: { label: 'Conflict',  
+       bg: isDark ? 'bg-orange-500/20' : 'bg-orange-500', 
+       text: isDark ? 'text-orange-500' : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-orange-600/30'
+     },
+  R: { label: 'Renamed',   
+       bg: isDark ? 'bg-blue-500/20'   : 'bg-blue-500', 
+       text: isDark ? 'text-blue-400'   : 'text-white',
+       border: isDark ? 'border-transparent' : 'border border-blue-600/30'
+     },
+});
 
-function DiffViewer({ diff, wrapText }) {
-  if (!diff) return <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>;
+const DARK_STATUS_CONFIG = STATUS_CONFIG(true);
+const LIGHT_STATUS_CONFIG = STATUS_CONFIG(false);
 
-  const lines = diff.split('\n');
-  return (
-    <div className="text-[10px] font-mono leading-relaxed pb-12 overflow-auto max-h-96">
-      {lines.map((line, i) => {
-        const isAdd = line.startsWith('+') && !line.startsWith('+++');
-        const isDel = line.startsWith('-') && !line.startsWith('---');
-        const isHunk = line.startsWith('@@');
-        return (
-          <div
-            key={i}
-            className={`flex min-w-0 transition-colors ${
-              isAdd ? 'bg-green-500/10 text-green-500' :
-              isDel ? 'bg-red-500/10 text-red-500' :
-              isHunk ? 'bg-[var(--git-accent)]/10 text-[var(--git-accent)] font-bold' :
-              'text-[var(--text-secondary)] opacity-80'
-            } ${wrapText ? '' : 'whitespace-pre overflow-x-auto'}`}
-          >
-            <span className="select-none w-6 text-center flex-shrink-0 opacity-40 mr-2">
-              {isAdd ? '+' : isDel ? '-' : ' '}
-            </span>
-            <span className={`flex-1 px-1 ${wrapText ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'}`}>
-              {isHunk ? line : line.slice(1) || ' '}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-export default function FileRow({ filePath, status, mode = 'changes', section, commitDiffChunk, isFocused }) {
+
+export default function FileRow({ filePath, status, mode = 'changes', section, isFocused, commitHash, oldPath }) {
   const [expanded, setExpanded] = useState(false);
-  const [wrapText, setWrapText] = useState(true);
   const [confirming, setConfirming] = useState(false);
-  const confirmTimeoutRef = React.useRef(null);
   const rowRef = React.useRef(null);
+  const [commitFileDiff, setCommitFileDiff] = useState(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState(null);
+  const [isSideBySide, setIsSideBySide] = useState(null);
+  const abortControllerRef = React.useRef(null);
+  const selectedProject = useGitStore(state => state.selectedProject);
 
   useEffect(() => {
     if (isFocused && rowRef.current) {
@@ -68,14 +75,12 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
   }, [isFocused]);
 
   useEffect(() => {
-    if (confirming) {
-      confirmTimeoutRef.current = setTimeout(() => setConfirming(false), 3000);
-      return () => {
-        if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
-      };
-    }
-  }, [confirming]);
+    return () => {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+    };
+  }, []);
 
+  const { isDarkMode } = useTheme();
   const { gitDiff, discardFile, fetchFileDiff, stageFiles, unstageFiles } = useGitStore(
     useShallow(state => ({
       gitDiff: state.gitDiff,
@@ -85,12 +90,51 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
       unstageFiles: state.unstageFiles,
     }))
   );
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG['U'];
-  const diff = commitDiffChunk ?? gitDiff[filePath];
+  const statusConfig = isDarkMode ? DARK_STATUS_CONFIG : LIGHT_STATUS_CONFIG;
+  const cfg = statusConfig[status] || statusConfig['U'];
+  const diff = mode === 'commit-view' ? commitFileDiff : gitDiff[filePath];
 
-  const handleExpand = () => {
-    if (!expanded && !diff && mode !== 'commit-view') {
-      fetchFileDiff(filePath);
+  const handleExpand = async () => {
+    if (!expanded) {
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const { signal } = controller;
+
+      if (mode === 'commit-view' && !commitFileDiff && commitHash && selectedProject) {
+        setDiffLoading(true);
+        setDiffError(null);
+        try {
+          const res = await authenticatedFetch(
+            `/api/git/commit-file-diff?project=${encodeURIComponent(selectedProject.name)}&commit=${commitHash}&file=${encodeURIComponent(filePath)}&oldPath=${encodeURIComponent(oldPath || filePath)}`,
+            { signal }
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const data = await res.json();
+          if (!signal.aborted) {
+            setCommitFileDiff({ original: data.originalContent, modified: data.modifiedContent });
+          }
+        } catch (e) {
+          if (!signal.aborted) {
+            console.error('Failed to load file diff:', e);
+            setDiffError('Failed to load diff');
+          }
+        } finally {
+          if (!signal.aborted) setDiffLoading(false);
+        }
+      } else if (!diff && mode !== 'commit-view') {
+        setDiffLoading(true);
+        setDiffError(null);
+        try {
+          await fetchFileDiff(filePath, signal);
+        } catch (err) {
+          if (!signal.aborted) {
+            setDiffError('Failed to load diff');
+          }
+        } finally {
+          if (!signal.aborted) setDiffLoading(false);
+        }
+      }
     }
     setExpanded(v => !v);
   };
@@ -106,12 +150,16 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
   const fileName = parts.pop();
   const dirPart = parts.length > 0 ? parts.join('/') + '/' : '';
 
+  const rowBgClass = isDarkMode 
+    ? (expanded ? 'bg-[var(--bg-muted)]/20' : isFocused ? 'bg-[var(--bg-muted)]/40' : '')
+    : (expanded ? 'bg-slate-100' : isFocused ? 'bg-slate-200' : '');
+
   return (
     <div className={`transition-colors truncate border-b border-border/50 ${isFocused ? 'ring-1 ring-inset ring-[var(--git-accent)] bg-[var(--git-accent)]/5' : ''}`}>
       <div
         ref={rowRef}
-        className={`flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-muted)]/30 group cursor-pointer transition-all duration-200
-          ${expanded ? 'bg-[var(--bg-muted)]/20' : ''} ${isFocused ? 'bg-[var(--bg-muted)]/40' : ''}`}
+        className={`flex items-center gap-2 px-3 py-1.5 ${isDarkMode ? 'hover:bg-[var(--bg-muted)]/30' : 'hover:bg-slate-200/60'} group cursor-pointer transition-all duration-200
+          ${rowBgClass}`}
         onClick={handleExpand}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -132,17 +180,19 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
         </span>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {expanded && (
-            <Tooltip label={wrapText ? 'Horizontal scroll' : 'Wrap text'}>
-              <button
-                aria-label={wrapText ? 'Toggle horizontal scroll' : 'Wrap text'}
-                onClick={(e) => { e.stopPropagation(); setWrapText(v => !v); }}
-                className={`p-1 rounded transition-all hover:bg-[var(--bg-base)] ${wrapText ? 'text-[var(--git-accent)]' : 'text-[var(--text-secondary)]'}`}
-              >
-                {wrapText ? <ArrowLeftRight className="w-3 h-3" /> : <AlignLeft className="w-3 h-3" />}
-              </button>
-            </Tooltip>
-          )}
+          <Tooltip label={isSideBySide === true ? 'Switch to Unified View' : 'Switch to Split View'}>
+            <button
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setIsSideBySide(prev => prev === null ? true : !prev); 
+              }}
+              className={`p-1 rounded transition-all text-[var(--text-secondary)] opacity-60 hover:opacity-100
+                ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-300/50'}`}
+            >
+              {isSideBySide === true ? <AlignLeft size={13} /> : <ArrowLeftRight size={13} />}
+            </button>
+          </Tooltip>
+
           {(mode === 'changes') && (
             <>
               {(status === 'M' || status === 'D' || status === 'U') && section !== 'staged' && (
@@ -184,7 +234,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
         </div>
 
         <Tooltip label={cfg.label}>
-          <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} shadow-sm group-hover:scale-110`}>
+          <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm group-hover:scale-110`}>
             {status === '??' ? 'U' : status}
           </span>
         </Tooltip>
@@ -197,14 +247,29 @@ export default function FileRow({ filePath, status, mode = 'changes', section, c
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
-            className="overflow-hidden bg-[var(--bg-base)]/30"
+            className={`overflow-hidden ${isDarkMode ? 'bg-[var(--bg-base)]/30' : 'bg-slate-50 border-t border-border/30'}`}
           >
             <div>
-              <div className="flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-surface)]/30">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>
+              <div className={`flex items-center gap-2 px-4 py-1.5 ${isDarkMode ? 'bg-[var(--bg-surface)]/30' : 'bg-white border-b border-border/20'}`}>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text} ${cfg.border}`}>{cfg.label}</span>
                 <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate opacity-60">{filePath}</span>
               </div>
-              <DiffViewer diff={diff} wrapText={wrapText} />
+              <div className="overflow-hidden">
+                {diffLoading || (!diff && mode !== 'commit-view') ? (
+                  <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>
+                ) : diffError ? (
+                  <div className="p-3 text-[10px] text-red-500 font-mono">{diffError}</div>
+                ) : diff ? (
+                  <MonacoDiffViewer
+                    original={diff.original || ''}
+                    modified={diff.modified || ''}
+                    height="300px"
+                    renderSideBySide={isSideBySide === null ? undefined : isSideBySide}
+                  />
+                ) : (
+                   <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono">No diff available</div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

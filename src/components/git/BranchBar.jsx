@@ -5,9 +5,11 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
+import { useTheme } from '../../contexts/ThemeContext';
 import Tooltip from '../common/Tooltip';
 
 export default function BranchBar() {
+  const { isDarkMode } = useTheme();
   const branches = useGitStore(s => s.branches);
   const currentBranch = useGitStore(s => s.currentBranch);
   const remoteStatus = useGitStore(s => s.remoteStatus);
@@ -23,6 +25,7 @@ export default function BranchBar() {
   const gitStatus = useGitStore(s => s.gitStatus);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
+  const hoverBgClass = isDarkMode ? 'hover:bg-[var(--bg-muted)]' : 'hover:bg-slate-200/60';
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNewBranch, setShowNewBranch] = useState(false);
@@ -114,7 +117,8 @@ export default function BranchBar() {
           onClick={() => selectCommit(null)}
           tabIndex={selectedCommit ? 0 : -1}
           aria-hidden={!selectedCommit}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-sm bg-transparent hover:bg-[var(--bg-muted)] text-[10px] font-bold text-[var(--git-accent)] transition-all active:scale-95 whitespace-nowrap uppercase tracking-tighter"
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-sm bg-transparent text-[10px] font-bold text-[var(--git-accent)] transition-all active:scale-95 whitespace-nowrap uppercase tracking-tighter
+            ${hoverBgClass}`}
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>
@@ -128,7 +132,7 @@ export default function BranchBar() {
           aria-haspopup="listbox"
           aria-expanded={showDropdown}
           className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-sm max-w-full
-            hover:bg-[var(--bg-muted)] transition-colors
+            ${hoverBgClass} transition-colors
             ${isDetachedHead ? 'text-orange-400' : 'text-[var(--text-primary)]'}`}
         >
           {isDetachedHead
@@ -197,7 +201,7 @@ export default function BranchBar() {
                     aria-selected={branch === currentBranch}
                     onClick={() => handleSwitchBranch(branch)}
                     disabled={loadingState.isSwitching}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-[var(--bg-muted)] transition-colors group disabled:opacity-50
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left ${hoverBgClass} transition-colors group disabled:opacity-50
                       ${branch === currentBranch ? 'text-[var(--accent)] bg-[var(--accent)]/5' : 'text-[var(--text-primary)]'}`}
                   >
                     <div className="w-4 flex items-center justify-center">
@@ -218,7 +222,7 @@ export default function BranchBar() {
                 {!showNewBranch ? (
                   <button
                     onClick={() => setShowNewBranch(true)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-muted)] rounded transition-colors group"
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${hoverBgClass} rounded transition-colors group`}
                   >
                     <Plus className="w-3.5 h-3.5 group-hover:text-[var(--git-accent)] transition-colors" />
                     <span>Create new branch</span>
@@ -240,7 +244,7 @@ export default function BranchBar() {
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => setShowNewBranch(false)} className="p-1.5 rounded hover:bg-[var(--bg-muted)] transition-colors">
+                    <button onClick={() => setShowNewBranch(false)} className={`p-1.5 rounded ${hoverBgClass} transition-colors`}>
                       <X className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
                     </button>
                   </div>
@@ -280,7 +284,7 @@ export default function BranchBar() {
             <button
               onClick={handleFetch}
               disabled={loadingState.fetching}
-              className="p-1.5 rounded text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] disabled:opacity-40 transition-colors"
+              className={`p-1.5 rounded text-[var(--text-secondary)] ${hoverBgClass} disabled:opacity-40 transition-colors`}
             >
               <CloudDownload className={`w-3.5 h-3.5 ${loadingState.fetching ? 'animate-pulse' : ''}`} />
             </button>
@@ -290,7 +294,7 @@ export default function BranchBar() {
           <button
             onClick={handleRefresh}
             disabled={loadingState.status}
-            className="p-1.5 rounded text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] disabled:opacity-40 transition-colors"
+            className={`p-1.5 rounded text-[var(--text-secondary)] ${hoverBgClass} disabled:opacity-40 transition-colors`}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingState.status ? 'animate-spin' : ''}`} />
           </button>
