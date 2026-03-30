@@ -199,6 +199,9 @@ function Sidebar({
   const getAllSessions = useCallback((project) => {
     const initialSessions = project.sessions || [];
     const additional = additionalSessions[project.name] || [];
+    if (additional.length === 0) {
+      return initialSessions;
+    }
     return [...initialSessions, ...additional];
   }, [additionalSessions]);
 
@@ -678,6 +681,7 @@ function Sidebar({
               const isExpanded = expandedProjectName === project.name;
               const isSelected = selectedProject?.name === project.name;
               const isStarred = isProjectStarred(project.name);
+              const allSessions = getAllSessions(project);
               
               return (
                 <div key={project.name} className="md:space-y-1">
@@ -737,7 +741,7 @@ function Sidebar({
                                   </h3>
                                   <p className="text-xs text-muted-foreground">
                                     {(() => {
-                                      const sessionCount = getAllSessions(project).length;
+                                      const sessionCount = allSessions.length;
                                       const hasMore = project.sessionMeta?.hasMore !== false;
                                       const count = hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
                                       return `${count} session${count === 1 ? '' : 's'}`;
@@ -793,7 +797,7 @@ function Sidebar({
                                       : "text-gray-600 dark:text-gray-400"
                                   )} />
                                 </button>
-                                {getAllSessions(project).length === 0 && (
+                                {allSessions.length === 0 && (
                                   <button
                                     className="w-8 h-8 rounded-lg bg-red-500/10 dark:bg-red-900/30 flex items-center justify-center active:scale-90 border border-red-200 dark:border-red-800"
                                     onClick={(e) => {
@@ -884,7 +888,7 @@ function Sidebar({
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {(() => {
-                                  const sessionCount = getAllSessions(project).length;
+                                  const sessionCount = allSessions.length;
                                   const hasMore = project.sessionMeta?.hasMore !== false;
                                   return hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
                                 })()}
@@ -954,7 +958,7 @@ function Sidebar({
                             >
                               <Edit3 className="w-3 h-3" />
                             </div>
-                            {getAllSessions(project).length === 0 && (
+                            {allSessions.length === 0 && (
                               <div
                                 className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center rounded cursor-pointer touch:opacity-100"
                                 onClick={(e) => {
@@ -1002,12 +1006,12 @@ function Sidebar({
                             </div>
                           </div>
                         ))
-                      ) : getAllSessions(project).length === 0 && !loadingSessions[project.name] ? (
+                      ) : allSessions.length === 0 && !loadingSessions[project.name] ? (
                         <div className="py-2 px-3 text-left">
                           <p className="text-xs text-muted-foreground">No sessions yet</p>
                         </div>
                       ) : (
-                        getAllSessions(project).map((session) => {
+                        allSessions.map((session) => {
                           // Calculate if session is active (within last 10 minutes)
                           const sessionDate = new Date(session.lastActivity);
                           const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
@@ -1204,7 +1208,7 @@ function Sidebar({
                       )}
 
                       {/* Show More Sessions Button */}
-                      {getAllSessions(project).length > 0 && project.sessionMeta?.hasMore !== false && (
+                      {allSessions.length > 0 && project.sessionMeta?.hasMore !== false && (
                         <Button
                           variant="ghost"
                           size="sm"
