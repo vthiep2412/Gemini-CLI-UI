@@ -132,7 +132,7 @@ export default function CommitInput() {
           disabled={!canCommit || loadingState?.committing || loadingState?.pushing || loadingState?.pulling}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold
             bg-[var(--git-accent)] hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed
-            text-white transition-all shadow-md hover:shadow-lg shadow-[var(--git-accent)]/20 active:scale-[0.98] uppercase tracking-wide"
+            text-white transition-all shadow-md hover:shadow-lg shadow-[var(--git-accent)]/20 active:scale-[0.98] tracking-wide"
         >
           {loadingState?.committing || loadingState?.pushing || loadingState?.pulling ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Synchronizing...</>
