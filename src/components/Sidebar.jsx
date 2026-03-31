@@ -99,8 +99,8 @@ function Sidebar({
       if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
         return;
       }
-      // On mobile devices, let the native click event handle it to avoid duplicate triggers and animation issues
-      // Just call the callback, but avoid stopPropagation unless absolutely necessary
+      e.preventDefault();
+      e.stopPropagation();
       callback();
     };
   };
