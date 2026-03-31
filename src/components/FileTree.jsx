@@ -3,6 +3,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
+import ImageViewer from './ImageViewer';
 
 import { api } from '../utils/api';
 
