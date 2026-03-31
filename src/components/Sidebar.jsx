@@ -47,7 +47,8 @@ const useGlobalTime = () => {
   const [time, setTime] = useState(getGlobalTime);
 
   useEffect(() => {
-    globalTimeListeners.add(setTime);
+    const listener = () => setTime(getGlobalTime());
+    globalTimeListeners.add(listener);
 
     if (!globalTimeInterval) {
       globalTimeInterval = setInterval(() => {
