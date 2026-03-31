@@ -7,8 +7,8 @@ def run_test(page):
 
     # Login
     print("Logging in...")
-    page.fill('input[placeholder="Enter your username"]', 'admin')
-    page.fill('input[placeholder="Enter your password"]', 'admin123')
+    page.fill('input[placeholder="Enter your username"]', os.environ.get('TEST_USERNAME', 'admin'))
+    page.fill('input[placeholder="Enter your password"]', os.environ.get('TEST_PASSWORD', 'admin123'))
     page.click('button:has-text("Sign In")')
     page.wait_for_timeout(3000)
 
