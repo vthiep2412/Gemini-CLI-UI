@@ -5,6 +5,7 @@ import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Ey
 import { cn } from '../lib/utils';
 
 import { api } from '../utils/api';
+import ImageViewer from './ImageViewer';
 
 function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
   const [files, setFiles] = useState([]);
@@ -149,6 +150,13 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
     return past.toLocaleDateString();
   };
 
+  const getFilePayload = (item) => ({
+    name: item.name,
+    path: item.path,
+    projectPath: selectedProject.path,
+    projectName: selectedProject.name
+  });
+
   const renderFileTree = (items, level = 0) => {
     return items.map((item) => (
       <div key={item.path} className="select-none">
@@ -164,21 +172,11 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
               // Open image in viewer
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
               // Open file in editor
               if (onFileSelect) {
-                onFileSelect({
-                  name: item.name,
-                  path: item.path,
-                  projectPath: selectedProject.path,
-                  projectName: selectedProject.name
-                });
+                onFileSelect(getFilePayload(item));
               }
             }
           }}
@@ -249,20 +247,10 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
             if (item.type === 'directory') {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
               if (onFileSelect) {
-                onFileSelect({
-                  name: item.name,
-                  path: item.path,
-                  projectPath: selectedProject.path,
-                  projectName: selectedProject.name
-                });
+                onFileSelect(getFilePayload(item));
               }
             }
           }}
@@ -314,20 +302,10 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
             if (item.type === 'directory') {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
               if (onFileSelect) {
-                onFileSelect({
-                  name: item.name,
-                  path: item.path,
-                  projectPath: selectedProject.path,
-                  projectName: selectedProject.name
-                });
+                onFileSelect(getFilePayload(item));
               }
             }
           }}
