@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Editor, useMonaco } from '@monaco-editor/react';
+import { Editor } from '@monaco-editor/react';
 import { X, Save, Download, Maximize2, Minimize2, ChevronLeft } from 'lucide-react';
 import FileTree from './FileTree';
 import { api } from '../utils/api';
