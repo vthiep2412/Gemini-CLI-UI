@@ -225,23 +225,102 @@ export default function CommitDetail() {
 
           <div className="flex flex-wrap items-center gap-y-3 gap-x-6 pt-2">
             <div className="flex items-center gap-2.5">
-              <Avatar name={commitMeta.author} />
+              <Avatar name={commitMeta.author} email={commitMeta.email} />
               <div className="min-w-0">
-                <p className="text-[13px] font-bold text-[var(--text-primary)] opacity-90 truncate leading-none mb-1">{commitMeta.author}</p>
-                <p className="text-[11px] text-[var(--text-secondary)] truncate leading-normal opacity-60">{commitMeta.email}</p>
+                <p className="text-[13px] font-bold text-[var(--text-primary)] opacity-90 truncate leading-none">{commitMeta.author}</p>
+                <div className="flex items-center min-w-0">
+                  <Tooltip label={commitMeta.email || ''}>
+                    <p className="text-[12px] text-[var(--text-secondary)] leading-normal opacity-60 truncate">
+                      {(() => {
+                        if (!commitMeta.email) return '—';
+                        const clean = commitMeta.email.replace(/^\d+\+/, '');
+                        if (clean.length <= 24) return clean;
+                        
+                        const atIdx = clean.indexOf('@');
+                        if (atIdx === -1) return clean.slice(0, 21) + '...';
+                        
+                        const local = clean.slice(0, atIdx);
+                        const domain = clean.slice(atIdx);
+                        const maxLocal = 24 - domain.length - 3;
+                        
+                        if (maxLocal > 0) {
+                          return local.slice(0, maxLocal) + '...' + domain;
+                        }
+                        return clean.slice(0, 22) + '...';
+                      })()}
+                    </p>
+                  </Tooltip>
+                  {commitMeta.email && (
+                    <Tooltip label="Copy email">
+                      <button 
+                        onClick={() => copyToClipboard(commitMeta.email.replace(/^\d+\+/, ''))} 
+                        className="p-1.5 hover:text-[var(--git-accent)] transition-colors opacity-40 hover:opacity-100"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </Tooltip>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-4 ml-auto">
               <div className="text-right">
-                <p className="text-[13px] font-mono text-[var(--text-secondary)] leading-none mb-1">
-                  {commitMeta.date || '—'}
-                </p>
+                {(() => {
+                  const dateStr = commitMeta.date || '';
+                  const d = new Date(dateStr);
+                  const isValid = !isNaN(d.getTime());
+                  
+                  if (!isValid) return <p className="text-[13px] font-mono text-[var(--text-secondary)] leading-none mb-1">—</p>;
+                  
+                  const now = new Date();
+                  const diffMs = now - d;
+                  const isRecent = diffMs < 24 * 60 * 60 * 1000;
+                  
+                  // Extract timezone from raw string (e.g. "+0700" -> "U+7")
+                  const tzMatch = dateStr.match(/([+-])(\d{2})(\d{1,2})$/);
+                  const tz = tzMatch ? `U${tzMatch[1]}${parseInt(tzMatch[2])}` : 'U+0';
+                  
+                  const formatClean = (date) => {
+                    return date.toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    }) + ` ${tz}`;
+                  };
+                  
+                  const getRelative = (ms) => {
+                    const sec = Math.floor(ms / 1000);
+                    if (sec < 60) return 'just now';
+                    const min = Math.floor(sec / 60);
+                    if (min < 60) return `${min}m ago`;
+                    const hr = Math.floor(min / 60);
+                    if (hr < 24) return `${hr}h ago`;
+                    const days = Math.floor(hr / 24);
+                    return `${days}d ago`;
+                  };
+                  
+                  const display = isRecent ? getRelative(diffMs) : formatClean(d);
+                  const tooltip = isRecent ? formatClean(d) : getRelative(diffMs);
+                  
+                  return (
+                    <Tooltip label={tooltip} contentClassName="text-[12px] px-3 py-2">
+                      <p className="text-[13px] font-mono text-[var(--text-secondary)] leading-none mb-1">
+                        {display}
+                      </p>
+                    </Tooltip>
+                  );
+                })()}
                 <div className="flex items-center justify-end gap-1.5 text-[12px] font-mono opacity-80">
-                  <span className="text-[var(--git-accent)]">{selectedCommit.slice(0, 8)}</span>
-                  <Tooltip label="Copy commit hash">
-                    <button onClick={() => copyToClipboard(selectedCommit)} className="p-0.5 hover:text-[var(--git-accent)] transition-colors">
-                      <Copy className="w-3 h-3" />
+                  <Tooltip label={selectedCommit} contentClassName="font-mono text-[11px]">
+                    <span className="text-[var(--git-accent)]">{selectedCommit.slice(0, 8)}</span>
+                  </Tooltip>
+                  <Tooltip label="Copy hash">
+                    <button onClick={() => copyToClipboard(selectedCommit)} className="p-1.5 hover:text-[var(--git-accent)] transition-colors">
+                      <Copy className="w-3.5 h-3.5" />
                     </button>
                   </Tooltip>
                 </div>

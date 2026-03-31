@@ -1,12 +1,37 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  GitBranch, CloudDownload, ArrowDown, ArrowUp, RefreshCw,
+  GitBranch, ArrowDown, ArrowUp, RefreshCw,
   ChevronDown, Check, Plus, AlertTriangle, X, ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useTheme } from '../../contexts/ThemeContext';
+import { toast } from 'sonner';
 import Tooltip from '../common/Tooltip';
+
+const TruncatedTooltip = ({ label, children, className = "", triggerClassName = "" }) => {
+  const [isTruncated, setIsTruncated] = useState(false);
+  const ref = useRef(null);
+
+  const checkTruncation = () => {
+    if (ref.current) {
+      const hasOverflow = ref.current.scrollWidth > ref.current.clientWidth;
+      setIsTruncated(hasOverflow);
+    }
+  };
+
+  return (
+    <Tooltip label={isTruncated ? label : ''} className={triggerClassName}>
+      <div 
+        ref={ref} 
+        onMouseEnter={checkTruncation}
+        className={`truncate ${className}`}
+      >
+        {children}
+      </div>
+    </Tooltip>
+  );
+};
 
 export default function BranchBar() {
   const { isDarkMode } = useTheme();
@@ -22,6 +47,7 @@ export default function BranchBar() {
   const fetchStatus = useGitStore(s => s.fetchStatus);
   const fetchBranches = useGitStore(s => s.fetchBranches);
   const fetchRemoteStatus = useGitStore(s => s.fetchRemoteStatus);
+  const fetchGraph = useGitStore(s => s.fetchGraph);
   const gitStatus = useGitStore(s => s.gitStatus);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
@@ -37,23 +63,82 @@ export default function BranchBar() {
   const isDetachedHead = gitStatus?.branch === 'HEAD' || currentBranch === 'HEAD';
 
   useEffect(() => {
-    const handler = (e) => {
+    const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowDropdown(false);
         setBranchSearch('');
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
-  const handleRefresh = async () => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowDropdown(false);
+        setBranchSearch('');
+      }
+    };
+
+    if (showDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showDropdown]);
+
+  const handleRefresh = async (isAuto = false) => {
+    // If it's an auto-refresh, we only proceed if we're not already loading or doing critical work
+    if (isAuto && (
+      loadingState.status || 
+      loadingState.fetching || 
+      loadingState.pushing || 
+      loadingState.pulling || 
+      loadingState.committing ||
+      loadingState.isSwitching ||
+      loadingState.isCreatingBranch
+    )) return;
+
     try {
-      await Promise.all([fetchStatus(), fetchBranches(), fetchRemoteStatus()]);
-    } catch (error) {
-      console.error('Failed to refresh:', error);
+      // Try to fetch from remote first if we have one
+      if (remoteStatus?.hasRemote) {
+        try {
+          const res = await fetchRemote();
+          // If fetch fails but it's manual, notify user. If it's auto, fail silently.
+          if (res?.error && !isAuto) {
+            toast.error(`Fetch failed (offline?): ${res.error}`);
+          }
+        } catch (e) {
+          if (!isAuto) toast.error("Syncing local state only (network error)");
+        }
+      }
+    } finally {
+      // Always refresh local state (file status, branch list, commit graph)
+      try {
+        await Promise.all([
+          fetchStatus(),
+          fetchBranches(),
+          fetchRemoteStatus(),
+          fetchGraph(0)
+        ]);
+      } catch (err) {
+        console.error('Local refresh failed:', err);
+      }
     }
   };
+
+  // Auto-refresh every 15 seconds
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      // Only auto-refresh if we are in the working tree (not viewing a specific commit)
+      if (!selectedCommit) {
+        handleRefresh(true);
+      }
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [remoteStatus?.hasRemote, selectedCommit]);
 
   const handleCreateBranch = async () => {
     if (!newBranchName.trim()) return;
@@ -63,7 +148,7 @@ export default function BranchBar() {
       setNewBranchName('');
       setShowNewBranch(false);
     } catch (error) {
-      // TODO: Consider showing error to user (e.g., via toast or inline message)
+      toast.error(`Failed to create branch: ${error.message}`);
       console.error('Failed to create branch:', error);
     } finally {
       setCreatingBranch(false);
@@ -81,7 +166,7 @@ export default function BranchBar() {
       setBranchSearch('');
     } catch (error) {
       console.error('Failed to switch branch:', error);
-      // Consider: show error toast, or close dropdown anyway
+      toast.error(`Failed to switch branch: ${error.message}`);
       setShowDropdown(false);
       setBranchSearch('');
     }
@@ -126,7 +211,7 @@ export default function BranchBar() {
       </div>
 
       {/* Branch selector */}
-      <div className="relative flex-1 min-w-0" ref={dropdownRef}>
+      <div className="relative min-w-0" ref={dropdownRef}>
         <button
           onClick={() => setShowDropdown(v => !v)}
           aria-haspopup="listbox"
@@ -138,9 +223,12 @@ export default function BranchBar() {
           {isDetachedHead
             ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-orange-400" />
             : <GitBranch className="w-5 h-5 flex-shrink-0 text-[var(--git-accent)]" />}
-          <span className="font-mono text-xs font-semibold truncate max-w-[120px]">
+          <TruncatedTooltip 
+            label={isDetachedHead ? 'DETACHED HEAD' : currentBranch} 
+            className="font-mono text-xs font-semibold max-w-[120px]"
+          >
             {isDetachedHead ? `DETACHED HEAD` : currentBranch}
-          </span>
+          </TruncatedTooltip>
           {/* Remote ahead/behind badges */}
           {remoteStatus?.hasRemote && (
             <span className="flex items-center gap-0.5 text-[10px] ml-0.5 mt-0.5">
@@ -211,7 +299,13 @@ export default function BranchBar() {
                         <GitBranch className="w-3.5 h-3.5 opacity-0 group-hover:opacity-40" />
                       )}
                     </div>
-                    <span className={`font-mono truncate ${branch === currentBranch ? 'font-bold' : ''}`}>{branch}</span>
+                    <TruncatedTooltip 
+                      label={branch} 
+                      className={`font-mono ${branch === currentBranch ? 'font-bold' : ''}`}
+                      triggerClassName="flex-1 min-w-0"
+                    >
+                      {branch}
+                    </TruncatedTooltip>
                   </button>
                 ))}
                 {filteredBranches.length === 0 && (
@@ -279,24 +373,13 @@ export default function BranchBar() {
             </button>
           </Tooltip>
         )}
-        {remoteStatus?.hasRemote && (
-          <Tooltip label="Fetch from remote">
-            <button
-              onClick={handleFetch}
-              disabled={loadingState.fetching}
-              className={`p-1.5 rounded text-[var(--text-secondary)] ${hoverBgClass} disabled:opacity-40 transition-colors`}
-            >
-              <CloudDownload className={`w-3.5 h-3.5 ${loadingState.fetching ? 'animate-pulse' : ''}`} />
-            </button>
-          </Tooltip>
-        )}
-        <Tooltip label="Refresh">
+        <Tooltip label="Sync with Remote & Refresh">
           <button
-            onClick={handleRefresh}
-            disabled={loadingState.status}
-            className={`p-1.5 rounded text-[var(--text-secondary)] ${hoverBgClass} disabled:opacity-40 transition-colors`}
+            onClick={() => handleRefresh(false)}
+            disabled={loadingState.status || loadingState.fetching}
+            className={`p-1.5 rounded text-[var(--text-secondary)] ${hoverBgClass} disabled:opacity-40 transition-colors pointer-events-auto`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loadingState.status ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${ (loadingState.status || loadingState.fetching) ? 'animate-spin' : ''}`} />
           </button>
         </Tooltip>
       </div>

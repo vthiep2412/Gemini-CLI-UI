@@ -455,6 +455,4 @@ function FileTree({ selectedProject }) {
   );
 }
 
-// Memoize FileTree to prevent unnecessary re-renders when parent MainContent
-// updates state that doesn't affect the selectedProject prop.
 export default React.memo(FileTree);
