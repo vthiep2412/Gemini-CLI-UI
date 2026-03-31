@@ -22,11 +22,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import MainContent from './components/MainContent';
-import MobileNav from './components/MobileNav';
 import ToolsSettings from './components/ToolsSettings';
 import QuickSettingsPanel from './components/QuickSettingsPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import FloatingNav from './components/FloatingNav';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { useWebSocket } from './utils/websocket';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -596,50 +596,50 @@ function AppContent() {
       )}
 
       {/* Mobile Sidebar Overlay */}
-      {isMobile && (
-        <div className={`fixed inset-0 z-50 flex transition-all duration-150 ease-out ${
-          sidebarOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
-        }`}>
-          <div 
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm transition-opacity duration-150 ease-out"
-            onClick={(e) => {
-              e.stopPropagation();
-              setSidebarOpen(false);
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setSidebarOpen(false);
-            }}
-          />
-          <div 
-            className={`relative w-[85vw] max-w-sm sm:w-80 bg-card border-r border-border h-full transform transition-transform duration-150 ease-out ${
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-          >
-            <Sidebar
-              projects={projects}
-              selectedProject={selectedProject}
-              selectedSession={selectedSession}
-              onProjectSelect={handleProjectSelect}
-              onSessionSelect={handleSessionSelect}
-              onNewSession={handleNewSession}
-              onSessionDelete={handleSessionDelete}
-              onProjectDelete={handleProjectDelete}
-              isLoading={isLoadingProjects}
-              onRefresh={handleSidebarRefresh}
-              onShowSettings={() => setShowToolsSettings(true)}
-              updateAvailable={updateAvailable}
-              latestVersion={latestVersion}
-              currentVersion={currentVersion}
-              onShowVersionModal={() => setShowVersionModal(true)}
-              activeTab={activeTab}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <div className="fixed inset-0 z-[60] flex overflow-hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
             />
+            
+            {/* Sidebar Pane */}
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200, mass: 0.5 }}
+              className="relative w-[85vw] max-w-sm sm:w-80 bg-card border-r border-border h-full shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Sidebar
+                projects={projects}
+                selectedProject={selectedProject}
+                selectedSession={selectedSession}
+                onProjectSelect={handleProjectSelect}
+                onSessionSelect={handleSessionSelect}
+                onNewSession={handleNewSession}
+                onSessionDelete={handleSessionDelete}
+                onProjectDelete={handleProjectDelete}
+                isLoading={isLoadingProjects}
+                onRefresh={handleSidebarRefresh}
+                onShowSettings={() => setShowToolsSettings(true)}
+                updateAvailable={updateAvailable}
+                latestVersion={latestVersion}
+                currentVersion={currentVersion}
+                onShowVersionModal={() => setShowVersionModal(true)}
+                activeTab={activeTab}
+              />
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Main Content Area - Flexible */}
       <div className="flex-1 flex flex-col min-w-0 relative">
@@ -687,16 +687,17 @@ function AppContent() {
             </div>
 
             {/* Middle: Floating Nav (Absolute Centered) */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center pointer-events-none z-20">
-              <div className="pointer-events-auto">
-                <FloatingNav
-                  activeTab={activeTab}
-                  setActiveTab={setActiveTab}
-                  isMobile={false}
-                  selectedProject={selectedProject}
-                />
+            {!isMobile && (
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center pointer-events-none z-20">
+                <div className="pointer-events-auto">
+                  <FloatingNav
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    selectedProject={selectedProject}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Right side: Actions/Status (Placeholder for future use) */}
             <div className="flex justify-end items-center space-x-2 z-10">
@@ -728,14 +729,17 @@ function AppContent() {
         />
       </div>
 
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Floating Navigation at Bottom */}
       {isMobile && (
-        <MobileNav
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isInputFocused={isInputFocused}
-          selectedProject={selectedProject}
-        />
+        <div className="fixed bottom-6 left-0 right-0 z-40 flex justify-center pointer-events-none px-4">
+          <div className="pointer-events-auto max-w-full">
+            <FloatingNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              selectedProject={selectedProject}
+            />
+          </div>
+        </div>
       )}
       
       {/* Quick Settings Panel - Always available via floating trigger */}

@@ -12,7 +12,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
   const [loading, setLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState(new Set());
   const [selectedImage, setSelectedImage] = useState(null);
-  const [viewMode, setViewMode] = useState('detailed'); // 'simple', 'detailed', 'compact'
+  const [viewMode, setViewMode] = useState('simple'); // 'simple', 'detailed', 'compact'
   const [lastRefresh, setLastRefresh] = useState(Date.now());
 
   useEffect(() => {
@@ -65,13 +65,6 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
     };
   }, [selectedProject, lastRefresh]);
 
-  // Load view mode preference from localStorage
-  useEffect(() => {
-    const savedViewMode = localStorage.getItem('file-tree-view-mode');
-    if (savedViewMode && ['simple', 'detailed', 'compact'].includes(savedViewMode)) {
-      setViewMode(savedViewMode);
-    }
-  }, []);
 
   const fetchFiles = async (isSilent = false) => {
     if (!isSilent || files.length === 0) {
@@ -353,9 +346,9 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-card">
+    <div className="h-full flex flex-col" style={{ backgroundColor: '#0a0f1e' }}>
       {/* View Mode Toggle */}
-      <div className="p-4 border-b border-border flex items-center justify-between">
+      <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <h3 className="text-sm font-medium text-foreground">Files</h3>
         <div className="flex gap-1">
           <Button
@@ -400,7 +393,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
         </div>
       )}
       
-      <ScrollArea className="flex-1 p-2">
+      <ScrollArea className="flex-1 py-2 pl-2 pr-0.5">
         {files.length === 0 ? (
           <div className="text-center py-8">
             <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3">

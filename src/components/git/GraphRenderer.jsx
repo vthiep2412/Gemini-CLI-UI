@@ -9,6 +9,7 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { useGitStore } from '../../hooks/gitStore';
 import Tooltip from '../common/Tooltip';
+import { useMobile } from '../../hooks/useMobile';
 
 const ROW_H = 40;         
 const LANE_W = 26;        
@@ -96,6 +97,8 @@ export default function GraphRenderer() {
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
   const fetchGraph = useGitStore(s => s.fetchGraph);
+  const setMobileView = useGitStore(s => s.setMobileView);
+  const isMobile = useMobile();
 
   const [hoveredHash, setHoveredHash] = useState(null);
   const containerRef = useRef(null);
@@ -300,11 +303,17 @@ export default function GraphRenderer() {
                 tabIndex={0}
                 role="button"
                 aria-pressed={isSelected}
-                onClick={() => selectCommit(isSelected ? null : commit.hash)}
+                onClick={() => {
+                  const newHash = isSelected ? null : commit.hash;
+                  selectCommit(newHash);
+                  if (isMobile && newHash) setMobileView('diff');
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    selectCommit(isSelected ? null : commit.hash);
+                    const newHash = isSelected ? null : commit.hash;
+                    selectCommit(newHash);
+                    if (isMobile && newHash) setMobileView('diff');
                   }
                 }}
                 onMouseEnter={() => setHoveredHash(commit.hash)}

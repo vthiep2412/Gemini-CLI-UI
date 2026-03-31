@@ -12,6 +12,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import Tooltip from '../common/Tooltip';
 import MonacoDiffViewer from '../common/MonacoDiffViewer';
 import { authenticatedFetch } from '../../utils/api';
+import { useMobile } from '../../hooks/useMobile';
 
 const STATUS_CONFIG = (isDark) => ({
   M: { label: 'Modified',  
@@ -57,6 +58,7 @@ const LIGHT_STATUS_CONFIG = STATUS_CONFIG(false);
 
 
 export default function FileRow({ filePath, status, mode = 'changes', section, isFocused, commitHash, oldPath }) {
+  const isMobile = useMobile();
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const rowRef = React.useRef(null);
@@ -179,7 +181,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
           <span className="text-[var(--text-primary)] font-medium">{fileName}</span>
         </span>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+        <div className={`flex items-center gap-1 transition-all duration-200 ${isMobile ? 'opacity-100 px-1' : 'opacity-0 group-hover:opacity-100'}`}>
           <Tooltip label={isSideBySide === true ? 'Switch to Unified View' : 'Switch to Split View'}>
             <button
               onClick={(e) => { 

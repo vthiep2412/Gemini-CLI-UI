@@ -42,6 +42,7 @@ export const useGitStore = create((set, get) => ({
     isRefreshing: false,
     discarding: false,
   },
+  mobileView: 'diff',         // 'diff' = commit/file-tree, 'graph' = commit-graph (mobile-only switch)
   error: null,                // { action, message } for toast notifications
 
   // ── Helper to update loading flags atomically ────────────────────────────
@@ -50,9 +51,11 @@ export const useGitStore = create((set, get) => ({
 
   setError: (action, message) => set({ error: message ? { action, message } : null }),
 
+  setMobileView: (view) => set({ mobileView: view }),
+
   // ── Initialize for a project ────────────────────────────────────────────
   initProject: (project) => {
-    set({ selectedProject: project, selectedCommit: null, commitMessage: '', graphData: [], graphLayout: [], graphSkip: 0, gitDiff: {}, error: null });
+    set({ selectedProject: project, selectedCommit: null, commitMessage: '', graphData: [], graphLayout: [], graphSkip: 0, gitDiff: {}, mobileView: 'diff', error: null });
     const { fetchStatus, fetchBranches, fetchRemoteStatus, fetchGraph } = get();
     fetchStatus();
     fetchBranches();

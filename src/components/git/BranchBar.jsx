@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   GitBranch, ArrowDown, ArrowUp, RefreshCw,
-  ChevronDown, Check, Plus, AlertTriangle, X, ArrowLeft
+  ChevronDown, Check, Plus, AlertTriangle, X, ArrowLeft,
+  Network, FileStack
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMobile } from '../../hooks/useMobile';
 import { toast } from 'sonner';
 import Tooltip from '../common/Tooltip';
 
@@ -51,6 +53,9 @@ export default function BranchBar() {
   const gitStatus = useGitStore(s => s.gitStatus);
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const selectCommit = useGitStore(s => s.selectCommit);
+  const mobileView = useGitStore(s => s.mobileView);
+  const setMobileView = useGitStore(s => s.setMobileView);
+  const isMobile = useMobile();
   const hoverBgClass = isDarkMode ? 'hover:bg-[var(--bg-muted)]' : 'hover:bg-slate-200/60';
 
   const [showDropdown, setShowDropdown] = useState(false);
@@ -372,6 +377,27 @@ export default function BranchBar() {
               <ArrowUp className={`w-3.5 h-3.5 ${loadingState.pushing ? 'animate-bounce' : ''}`} />
             </button>
           </Tooltip>
+        )}
+        {isMobile && !selectedCommit && (
+          <div className="flex items-center gap-2 mr-1">
+            {mobileView === 'diff' ? (
+              <button
+                onClick={() => setMobileView('graph')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-orange-500/10 text-orange-500 border border-orange-500/20 active:scale-95 transition-all text-[10px] font-bold uppercase tracking-tight shadow-sm`}
+              >
+                <Network className="w-3 h-3" />
+                <span>Graph View</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setMobileView('diff')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-blue-500/10 text-blue-500 border border-blue-500/20 active:scale-95 transition-all text-[10px] font-bold uppercase tracking-tight shadow-sm`}
+              >
+                <FileStack className="w-3 h-3" />
+                <span>Diff View</span>
+              </button>
+            )}
+          </div>
         )}
         <Tooltip label="Sync with Remote & Refresh">
           <button

@@ -12,6 +12,8 @@ import { useGitStore } from '../../hooks/gitStore';
 import SplitPane from './SplitPane';
 import LeftPane from './LeftPane';
 import RightPane from './RightPane';
+import { useMobile } from '../../hooks/useMobile';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function GitPanelV2({ project, ws }) {
   // Zustand actions (reference stable across renders)
@@ -21,6 +23,8 @@ export default function GitPanelV2({ project, ws }) {
   const fetchStatus = useGitStore(s => s.fetchStatus);
   const fetchRemoteStatus = useGitStore(s => s.fetchRemoteStatus);
   const fetchGraph = useGitStore(s => s.fetchGraph);
+  const mobileView = useGitStore(s => s.mobileView);
+  const isMobile = useMobile();
 
   const workerRef = useRef(null);
   const debounceRef = useRef(null);
@@ -85,6 +89,25 @@ export default function GitPanelV2({ project, ws }) {
   }, [ws, handleWsMessage]);
 
   // ── 4. Render ────────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full w-full overflow-hidden" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={mobileView}
+            initial={{ opacity: 0, x: mobileView === 'graph' ? 20 : -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: mobileView === 'graph' ? -20 : 20 }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            className="flex-1 flex flex-col h-full w-full overflow-hidden"
+          >
+            {mobileView === 'diff' ? <LeftPane /> : <RightPane />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full w-full overflow-hidden" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
       <SplitPane

@@ -9,11 +9,20 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
   const [openFiles, setOpenFiles] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
   const [fileContents, setFileContents] = useState({});
+  const [initialFileContents, setInitialFileContents] = useState({});
   const [fileLoading, setFileLoading] = useState({});
   const [fileErrors, setFileErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showEditorOnMobile, setShowEditorOnMobile] = useState(false);
+
+  // Resize logic
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('ide-sidebar-width');
+    return saved ? parseInt(saved, 10) : 260;
+  });
+  const isResizing = useRef(false);
+  const containerRef = useRef(null);
 
   // Handle files opened externally (e.g. from chat)
   useEffect(() => {
@@ -61,6 +70,7 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
         if (!response.ok) throw new Error('Failed to read file');
         const data = await response.json();
         setFileContents(prev => ({ ...prev, [file.path]: data.content }));
+        setInitialFileContents(prev => ({ ...prev, [file.path]: data.content }));
       } catch (error) {
         console.error('Error loading file:', error);
         setFileErrors(prev => ({ ...prev, [file.path]: error.message }));
@@ -77,6 +87,11 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
 
     // Cleanup file content from memory
     setFileContents(prev => {
+      const newContents = { ...prev };
+      delete newContents[fileToClose.path];
+      return newContents;
+    });
+    setInitialFileContents(prev => {
       const newContents = { ...prev };
       delete newContents[fileToClose.path];
       return newContents;
@@ -131,6 +146,7 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
       const contentToSave = fileContentsRef.current[currentActive.path] || '';
       const response = await api.saveFile(currentActive.projectName, currentActive.path, contentToSave);
       if (!response.ok) throw new Error('Failed to save file');
+      setInitialFileContents(prev => ({ ...prev, [currentActive.path]: contentToSave }));
       toast.success(`${currentActive.name} saved successfully`);
     } catch (error) {
       console.error('Error saving file:', error);
@@ -175,15 +191,52 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
     }
   };
 
+  const handleBeforeMount = (monaco) => {
+    monaco.editor.defineTheme('deep-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [{ token: '', background: '0a0f1e' }],
+      colors: {
+        'editor.background': '#0a0f1e',
+      }
+    });
+  };
+
+  const startResizing = (e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', stopResizing);
+    document.body.style.cursor = 'ew-resize';
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isResizing.current || !containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const newWidth = Math.max(160, Math.min(e.clientX - containerRect.left, containerRect.width * 0.5));
+    setSidebarWidth(newWidth);
+    localStorage.setItem('ide-sidebar-width', newWidth.toString());
+  };
+
+  const stopResizing = () => {
+    isResizing.current = false;
+    document.removeEventListener('pointermove', handlePointerMove);
+    document.removeEventListener('pointerup', stopResizing);
+    document.body.style.cursor = 'default';
+  };
+
   // Determine layout classes
   const showSidebar = !isMobile || !showEditorOnMobile;
   const showEditor = !isMobile || showEditorOnMobile;
 
   return (
-    <div className="flex h-full w-full bg-background overflow-hidden">
+    <div className="flex h-full w-full bg-background overflow-hidden" ref={containerRef}>
       {/* Sidebar / File Tree */}
       {showSidebar && (
-        <div className={`flex flex-col border-r border-border bg-card ${isMobile ? 'w-full' : 'w-64 min-w-[250px]'}`}>
+        <div 
+          className={`flex flex-col border-r border-border relative ${isMobile ? 'w-full' : ''}`}
+          style={{ width: isMobile ? '100%' : sidebarWidth, backgroundColor: '#0a0f1e' }}
+        >
           <div className="flex-1 overflow-hidden">
             <FileTree
               selectedProject={selectedProject}
@@ -192,6 +245,16 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
               ideMode={true}
             />
           </div>
+
+          {/* Resize Handle */}
+          {!isMobile && (
+            <div
+              onPointerDown={startResizing}
+              className="absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-primary/40 active:bg-primary transition-colors z-20 group"
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1 cursor-ew-resize" />
+            </div>
+          )}
         </div>
       )}
 
@@ -210,25 +273,51 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                 )}
-                {openFiles.map((file) => (
-                  <div
-                    key={file.path}
-                    onClick={() => setActiveFile(file)}
-                    className={`group flex items-center gap-2 px-3 py-2 min-w-max border-r border-border cursor-pointer select-none text-sm transition-colors ${
-                      activeFile?.path === file.path
-                        ? 'bg-background text-foreground border-t-2 border-t-primary'
-                        : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border-t-2 border-t-transparent'
-                    }`}
-                  >
-                    <span>{file.name}</span>
-                    <button
-                      onClick={(e) => handleCloseFile(e, file)}
-                      className="p-0.5 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-accent/50 transition-opacity"
+                {openFiles.map((file) => {
+                  const isDirty = initialFileContents[file.path] !== fileContents[file.path];
+                  const isActive = activeFile?.path === file.path;
+
+                  return (
+                    <div
+                      key={file.path}
+                      onClick={() => setActiveFile(file)}
+                      className={`group flex items-center gap-2 px-3 py-2 min-w-max border-r border-border cursor-pointer select-none text-sm transition-colors relative ${
+                        isActive
+                          ? 'bg-background text-foreground border-t-2 border-t-primary'
+                          : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground border-t-2 border-t-transparent'
+                      }`}
                     >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      <span className={isDirty ? 'italic' : ''}>{file.name}</span>
+                      
+                      <div className="flex items-center justify-center w-4 h-4">
+                        {isDirty ? (
+                          <div className="relative">
+                            {/* Circle for unsaved state */}
+                            <div className="w-2 h-2 rounded-full bg-foreground/40 group-hover:opacity-0 transition-opacity" />
+                            {/* X for closing, hidden behind circle unless hovered or active */}
+                            <button
+                              onClick={(e) => handleCloseFile(e, file)}
+                              className={`absolute inset-0 flex items-center justify-center p-0.5 rounded-sm transition-opacity ${
+                                isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                              }`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => handleCloseFile(e, file)}
+                            className={`flex items-center justify-center p-0.5 rounded-sm transition-opacity ${
+                              isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Editor Content */}
@@ -254,7 +343,8 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
                   <Editor
                     height="100%"
                     language={getLanguage(activeFile.name)}
-                    theme={isDarkMode ? 'vs-dark' : 'vs'}
+                    theme={isDarkMode ? 'deep-dark' : 'vs'}
+                    beforeMount={handleBeforeMount}
                     value={fileContents[activeFile.path] || ''}
                     onChange={handleEditorChange}
                     options={{

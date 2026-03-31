@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import Switch from './ui/Switch';
-import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Volume2, Lock, Unlock, HelpCircle, ChevronDown } from 'lucide-react';
+import { X, Plus, Settings, Shield, Check, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Volume2, Lock, Unlock, HelpCircle, ChevronDown } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 // --- Stable Helper Components (Defined Outside to preserve exit animations) ---
@@ -115,7 +115,10 @@ const ToolQuickAdd = ({ id, isOpen, setIsOpen, dropdownRef, tools, currentTools,
 );
 
 function ToolsSettings({ isOpen, onClose }) {
+  // Appearance state - initialized from ThemeContext but manually applied on save
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const [bufferedIsDarkMode, setBufferedIsDarkMode] = useState(isDarkMode);
+
   const [allowedTools, setAllowedTools] = useState([]);
   const [disallowedTools, setDisallowedTools] = useState([]);
   const [newAllowedTool, setNewAllowedTool] = useState('');
@@ -163,6 +166,63 @@ function ToolsSettings({ isOpen, onClose }) {
   const modelDropdownRef = useRef(null);
   const sortDropdownRef = useRef(null);
   const soundDropdownRef = useRef(null);
+  
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Section Refs for mobile scrolling
+  const generalRef = useRef(null);
+  const toolsRef = useRef(null);
+  const mcpRef = useRef(null);
+  const appearanceRef = useRef(null);
+
+  const sectionRefs = {
+    general: generalRef,
+    tools: toolsRef,
+    mcp: mcpRef,
+    appearance: appearanceRef
+  };
+
+  const scrollToSection = (id) => {
+    setActiveTab(id);
+    if (isMobile && sectionRefs[id]?.current) {
+      sectionRefs[id].current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Intersection Observer for mobile scrolling to update active tab
+  useEffect(() => {
+    if (!isMobile || !isOpen) return;
+
+    const observerOptions = {
+      root: null,
+      rootMargin: '-100px 0px -50% 0px',
+      threshold: 0
+    };
+
+    const handleIntersection = (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const id = Object.keys(sectionRefs).find(
+            (key) => sectionRefs[key].current === entry.target
+          );
+          if (id) setActiveTab(id);
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(handleIntersection, observerOptions);
+    Object.values(sectionRefs).forEach((ref) => {
+      if (ref.current) observer.observe(ref.current);
+    });
+
+    return () => observer.disconnect();
+  }, [isMobile, isOpen]);
 
   // Close dropdowns on click outside
   useEffect(() => {
@@ -444,12 +504,14 @@ function ToolsSettings({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       loadSettings();
+      setSaveStatus(null);
+      // Synchronize buffered theme state
+      setBufferedIsDarkMode(isDarkMode);
     }
   }, [isOpen]);
 
   const loadSettings = async () => {
     try {
-      
       // Load from localStorage
       const savedSettings = localStorage.getItem('gemini-tools-settings');
       
@@ -487,6 +549,11 @@ function ToolsSettings({ isOpen, onClose }) {
     setSaveStatus(null);
     
     try {
+      // Apply theme choice if changed
+      if (bufferedIsDarkMode !== isDarkMode) {
+        toggleDarkMode();
+      }
+
       const settings = {
         allowedTools,
         disallowedTools,
@@ -497,7 +564,6 @@ function ToolsSettings({ isOpen, onClose }) {
         notificationSoundType,
         lastUpdated: new Date().toISOString()
       };
-      
       
       // Save to localStorage
       localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
@@ -515,12 +581,36 @@ function ToolsSettings({ isOpen, onClose }) {
       
       setTimeout(() => {
         onClose();
-      }, 1000);
+      }, 800);
     } catch (error) {
       // console.error('Error saving tool settings:', error);
       setSaveStatus('error');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const autoSaveNotifications = (soundEnabled, soundType) => {
+    try {
+      const savedSettings = localStorage.getItem('gemini-tools-settings');
+      let currentSettings = savedSettings ? JSON.parse(savedSettings) : {};
+      
+      const updatedSettings = {
+        ...currentSettings,
+        enableNotificationSound: soundEnabled,
+        notificationSoundType: soundType,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      localStorage.setItem('gemini-tools-settings', JSON.stringify(updatedSettings));
+      
+      // Trigger storage event so the rest of the app picks it up immediately
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'gemini-tools-settings',
+        newValue: JSON.stringify(updatedSettings)
+      }));
+    } catch (error) {
+      // Silently fail for auto-save
     }
   };
 
@@ -688,6 +778,350 @@ function ToolsSettings({ isOpen, onClose }) {
     }
   };
 
+  const renderGeneralContent = () => (
+    <div className="space-y-8">
+      {/* Model Selection */}
+      <div className="space-y-4 text-left">
+        <div className="flex items-center gap-2 text-foreground">
+          <Zap className="w-4 h-4 text-cyan-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Gemini Model</h3>
+        </div>
+        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 space-y-4 transition-all hover:bg-muted/70 shadow-sm">
+          <ModernSelect
+            id="model-select"
+            value={selectedModel}
+            onChange={setSelectedModel}
+            options={availableModels}
+            placeholder="Select Model"
+            isOpen={showModelDropdown}
+            setIsOpen={setShowModelDropdown}
+            dropdownRef={modelDropdownRef}
+          />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {availableModels.find(m => m.value === selectedModel)?.description}
+          </p>
+        </div>
+      </div>
+
+      {/* Behavior Settings */}
+      <div className="space-y-4 text-left">
+        <div className="flex items-center gap-2 text-foreground">
+          <Volume2 className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Notifications</h3>
+        </div>
+        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all shadow-sm">
+          <div>
+            <div className="text-sm font-medium text-foreground">Notification Sound</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Play sound when Gemini responds</div>
+          </div>
+          <div className="flex items-center gap-3">
+            {enableNotificationSound && (
+              <>
+                <div className="w-32 sm:w-40">
+                  <ModernSelect
+                    id="sound-select"
+                    value={notificationSoundType}
+                    onChange={(val) => {
+                      setNotificationSoundType(val);
+                      autoSaveNotifications(enableNotificationSound, val);
+                      import('../utils/notificationSound').then(({ playNotificationSound }) => {
+                        playNotificationSound();
+                      });
+                    }}
+                    options={availableSounds}
+                    placeholder="Sound"
+                    isOpen={showSoundDropdown}
+                    setIsOpen={setShowSoundDropdown}
+                    dropdownRef={soundDropdownRef}
+                    className="scale-90 origin-right"
+                    dropdownClassName="right-0 w-48 sm:w-64"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    const { playNotificationSound } = await import('../utils/notificationSound');
+                    autoSaveNotifications(true, notificationSoundType);
+                    playNotificationSound();
+                  }}
+                  className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                >
+                  <Play className="w-5 h-5" />
+                </button>
+              </>
+            )}
+            <Switch
+              checked={enableNotificationSound}
+              onChange={(val) => {
+                setEnableNotificationSound(val);
+                autoSaveNotifications(val, notificationSoundType);
+              }}
+              thumbContent={<Volume2 className={`w-2.5 h-2.5 transition-colors ${enableNotificationSound ? 'text-blue-600' : 'text-gray-400'}`} />}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Permission Settings */}
+      <div className="space-y-4 text-left">
+        <div className="flex items-center gap-2 text-foreground">
+          <Shield className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
+        </div>
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
+          <div>
+            <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
+            <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
+          </div>
+          <Switch
+            checked={skipPermissions}
+            onChange={setSkipPermissions}
+            className={skipPermissions ? "!bg-orange-600" : ""}
+            thumbContent={<Zap className={`w-2.5 h-2.5 transition-colors ${skipPermissions ? 'text-orange-600' : 'text-gray-400'}`} />}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAppearanceContent = () => (
+    <div className="space-y-8 text-left">
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-foreground">
+          <Moon className="w-4 h-4 text-purple-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Visuals</h3>
+        </div>
+        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all shadow-sm">
+          <div>
+            <div className="text-sm font-medium text-foreground">Dark Mode</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Toggle interface theme</div>
+          </div>
+          <Switch
+            checked={bufferedIsDarkMode}
+            onChange={setBufferedIsDarkMode}
+            thumbContent={bufferedIsDarkMode ? <Moon className="w-2.5 h-2.5 text-blue-600" /> : <Sun className="w-2.5 h-2.5 text-yellow-500" />}
+          />
+        </div>
+
+        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all shadow-sm">
+          <div>
+            <div className="text-sm font-medium text-foreground">Project Sorting</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Order of items in sidebar</div>
+          </div>
+          <ModernSelect
+            id="sort-select"
+            value={projectSortOrder}
+            onChange={setProjectSortOrder}
+            options={availableSorts}
+            placeholder="Sort Order"
+            className="w-44"
+            isOpen={showSortDropdown}
+            setIsOpen={setShowSortDropdown}
+            dropdownRef={sortDropdownRef}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderToolsContent = () => (
+    <div className="space-y-8 text-left">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-foreground">
+            <Unlock className="w-4 h-4 text-green-500" />
+            <h3 className="text-sm font-bold uppercase tracking-wider">Allowed Tools</h3>
+          </div>
+          <ToolQuickAdd 
+            id="allowed-tools"
+            isOpen={showAllowedDropdown}
+            setIsOpen={setShowAllowedDropdown}
+            dropdownRef={allowedDropdownRef}
+            tools={commonTools}
+            currentTools={allowedTools}
+            onSelect={addAllowedTool}
+            colorClass="green"
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={newAllowedTool}
+              onChange={(e) => setNewAllowedTool(e.target.value)}
+              placeholder='e.g., "Bash", "Write"'
+              className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
+              onKeyPress={(e) => e.key === 'Enter' && addAllowedTool(newAllowedTool)}
+            />
+            <Button size="sm" onClick={() => addAllowedTool(newAllowedTool)} disabled={!newAllowedTool} className="rounded-xl h-10 w-10 p-0 shadow-lg shadow-blue-500/10">
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
+            {allowedTools.map(tool => (
+              <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-green-500/30 bg-green-500/20 dark:bg-green-500/30 text-green-800 dark:text-green-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
+                {tool}
+                <button onClick={() => removeAllowedTool(tool)} className="p-0.5 hover:bg-green-500/30 rounded-full transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
+            {allowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-allowed</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-foreground">
+            <Lock className="w-4 h-4 text-red-500" />
+            <h3 className="text-sm font-bold uppercase tracking-wider">Disallowed Tools</h3>
+          </div>
+          <ToolQuickAdd 
+            id="blocked-tools"
+            isOpen={showDisallowedDropdown}
+            setIsOpen={setShowDisallowedDropdown}
+            dropdownRef={disallowedDropdownRef}
+            tools={commonTools}
+            currentTools={disallowedTools}
+            onSelect={addDisallowedTool}
+            colorClass="red"
+          />
+        </div>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={newDisallowedTool}
+              onChange={(e) => setNewDisallowedTool(e.target.value)}
+              placeholder='e.g., "Bash(rm:*)"'
+              className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
+              onKeyPress={(e) => e.key === 'Enter' && addDisallowedTool(newDisallowedTool)}
+            />
+            <Button size="sm" onClick={() => addDisallowedTool(newDisallowedTool)} disabled={!newDisallowedTool} className="rounded-xl h-10 w-10 p-0 variant-outline border border-red-500/30 hover:bg-red-500/10">
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
+            {disallowedTools.map(tool => (
+              <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-red-500/30 bg-red-500/20 dark:bg-red-500/30 text-red-800 dark:text-red-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
+                {tool}
+                <button onClick={() => removeDisallowedTool(tool)} className="p-0.5 hover:bg-red-500/30 rounded-full transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </Badge>
+            ))}
+            {disallowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-blocked</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 bg-blue-500/15 border border-blue-500/30 rounded-2xl space-y-3 text-left shadow-sm">
+        <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tight flex items-center gap-2">
+          <HelpCircle className="w-4 h-4" /> Tool Pattern Help
+        </h4>
+        <div className="text-xs text-muted-foreground leading-relaxed">
+          Use patterns like <code className="text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/20">Bash(git log:*)</code> to allow specific commands without full YOLO mode.
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMcpContent = () => (
+    <div className="space-y-8 text-left">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-foreground">
+          <Server className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">MCP Servers</h3>
+        </div>
+        <Button size="sm" onClick={() => openMcpForm()} className="rounded-lg h-8 px-3 text-xs">
+          Add Server
+        </Button>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {showMcpForm ? (
+          <motion.form
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onSubmit={handleMcpSubmit}
+            className="bg-muted/30 border border-border/50 rounded-2xl p-6 space-y-6"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold">Server Name</label>
+                <Input
+                  value={mcpFormData.name}
+                  onChange={(e) => setMcpFormData({ ...mcpFormData, name: e.target.value })}
+                  className="h-9 bg-background border-border/50"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold">Transport</label>
+                <select
+                  value={mcpFormData.type}
+                  onChange={(e) => setMcpFormData({ ...mcpFormData, type: e.target.value })}
+                  className="w-full h-9 px-2 bg-background border border-border/50 rounded-lg text-sm"
+                >
+                  <option value="stdio">stdio (Local)</option>
+                  <option value="sse">sse (Remote)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold">
+                {mcpFormData.type === 'stdio' ? 'Command' : 'Endpoint URL'}
+              </label>
+              <Input
+                value={mcpFormData.type === 'stdio' ? mcpFormData.config.command : mcpFormData.config.url}
+                onChange={(e) => updateMcpConfig(mcpFormData.type === 'stdio' ? 'command' : 'url', e.target.value)}
+                className="h-9 bg-background border-border/50"
+                placeholder={mcpFormData.type === 'stdio' ? 'e.g., node, python' : 'https://...'}
+                required
+              />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button type="submit" disabled={mcpLoading} className="flex-1 h-10 rounded-xl">
+                {mcpLoading ? 'Saving...' : editingMcpServer ? 'Update' : 'Add Server'}
+              </Button>
+              <Button type="button" variant="ghost" onClick={resetMcpForm} className="h-10 rounded-xl">
+                Cancel
+              </Button>
+            </div>
+          </motion.form>
+        ) : (
+          <motion.div initial={{ opacity: 1 }} className="space-y-3">
+            {mcpServers.length === 0 ? (
+              <div className="text-center py-10 border-2 border-dashed border-border/10 rounded-2xl">
+                <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No MCP servers configured</p>
+              </div>
+            ) : (
+              mcpServers.map(server => (
+                <div key={server.id} className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 shadow-sm transition-all group">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-background border border-border/50 rounded-lg group-hover:border-blue-500/30">
+                      {getTransportIcon(server.type)}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{server.name}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase">{server.type}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button onClick={() => openMcpForm(server)} className="p-1.5 hover:bg-muted rounded-md"><Edit3 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => handleMcpDelete(server.id, server.scope)} className="p-1.5 hover:bg-red-500/10 text-red-500 rounded-md"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+              ))
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
   const tabItems = [
     { id: 'general', label: 'General', icon: <Settings className="w-4 h-4" /> },
     { id: 'tools', label: 'Tools', icon: <Shield className="w-4 h-4" /> },
@@ -698,26 +1132,28 @@ function ToolsSettings({ isOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-10 pointer-events-none">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-6 md:p-10 pointer-events-none">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm pointer-events-auto"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
           />
 
           {/* Modal Container */}
           <motion.div
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative bg-background/80 dark:bg-card/70 backdrop-blur-xl border border-white/10 shadow-[0_0_50px_rgba(255,255,255,0.08)] rounded-2xl w-full max-w-4xl h-full max-h-[600px] flex flex-col md:flex-row overflow-hidden pointer-events-auto"
+            initial={isMobile ? { y: '100%', opacity: 1 } : { scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ y: 0, scale: 1, opacity: 1 }}
+            exit={isMobile ? { y: '100%', opacity: 1 } : { scale: 0.9, opacity: 0, y: 20 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300, mass: 0.8 }}
+            className={`relative bg-background/80 dark:bg-[#0c0f1a]/90 backdrop-blur-3xl border border-white/5 shadow-[0_0_80px_rgba(37,99,235,0.15)] flex flex-col md:flex-row overflow-hidden pointer-events-auto ${
+              isMobile ? 'w-full h-full max-w-none max-h-none rounded-none border-none' : 'rounded-2xl w-full max-w-4xl h-full max-h-[700px]'
+            }`}
           >
-            {/* Sidebar Navigation */}
-            <div className="w-full md:w-56 border-b md:border-b-0 md:border-r border-border/50 bg-background/40 flex-shrink-0">
+            {/* Sidebar Navigation - Hidden on Mobile */}
+            <div className="hidden md:flex w-56 border-r border-border/50 bg-background/40 flex-shrink-0 flex-col">
               <div className="p-6">
                 <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-400">
                   Settings
@@ -741,421 +1177,130 @@ function ToolsSettings({ isOpen, onClose }) {
               </nav>
             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 flex flex-col min-w-0">
-              <ScrollArea className="flex-1">
-                <div className="p-6 space-y-8">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={activeTab}
-                      initial={{ opacity: 0, x: 10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="space-y-8"
-                    >
-                      {/* General Tab */}
-                      {activeTab === 'general' && (
-                        <div className="space-y-8">
-                          {/* Model Selection */}
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-foreground">
-                              <Zap className="w-4 h-4 text-cyan-500" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider">Gemini Model</h3>
-                            </div>
-                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 space-y-4 transition-all hover:bg-muted/70 text-left shadow-sm">
-                              <ModernSelect
-                                id="model-select"
-                                value={selectedModel}
-                                onChange={setSelectedModel}
-                                options={availableModels}
-                                placeholder="Select Model"
-                                isOpen={showModelDropdown}
-                                setIsOpen={setShowModelDropdown}
-                                dropdownRef={modelDropdownRef}
-                              />
-                              <p className="text-xs text-muted-foreground leading-relaxed">
-                                {availableModels.find(m => m.value === selectedModel)?.description}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Behavior Settings */}
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-foreground">
-                              <Volume2 className="w-4 h-4 text-blue-500" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider">Notifications</h3>
-                            </div>
-                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
-                              <div>
-                                <div className="text-sm font-medium">Notification Sound</div>
-                                <div className="text-xs text-muted-foreground mt-0.5">Play sound when Gemini responds</div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                {enableNotificationSound && (
-                                  <>
-                                    <div className="w-32 sm:w-40">
-                                      <ModernSelect
-                                        id="sound-select"
-                                        value={notificationSoundType}
-                                        onChange={(val) => {
-                                          setNotificationSoundType(val);
-                                          // Test the sound immediately when selected if enabled
-                                          import('../utils/notificationSound').then(({ playNotificationSound }) => {
-                                            // Temporarily update localStorage so playNotificationSound reads the new type
-                                            const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
-                                            localStorage.setItem('gemini-tools-settings', JSON.stringify({
-                                              ...settings,
-                                              notificationSoundType: val,
-                                              enableNotificationSound: true
-                                            }));
-                                            playNotificationSound();
-                                          });
-                                        }}
-                                        options={availableSounds}
-                                        placeholder="Sound"
-                                        isOpen={showSoundDropdown}
-                                        setIsOpen={setShowSoundDropdown}
-                                        dropdownRef={soundDropdownRef}
-                                        className="scale-90 origin-right"
-                                        dropdownClassName="right-0 w-48 sm:w-64"
-                                      />
-                                    </div>
-                                    <button
-                                      onClick={async () => {
-                                        const { playNotificationSound } = await import('../utils/notificationSound');
-                                        // Ensure localStorage is sync'd for the test button
-                                        const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
-                                        localStorage.setItem('gemini-tools-settings', JSON.stringify({
-                                          ...settings,
-                                          notificationSoundType: notificationSoundType,
-                                          enableNotificationSound: true
-                                        }));
-                                        playNotificationSound();
-                                      }}
-                                      className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                                    >
-                                      <Play className="w-5 h-5" />
-                                    </button>
-                                  </>
-                                )}
-                                <Switch
-                                  checked={enableNotificationSound}
-                                  onChange={setEnableNotificationSound}
-                                  thumbContent={<Volume2 className={`w-2.5 h-2.5 transition-colors ${enableNotificationSound ? 'text-blue-600' : 'text-gray-400'}`} />}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Permission Settings */}
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-foreground">
-                              <Shield className="w-4 h-4 text-orange-500" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
-                            </div>
-                            <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all text-left shadow-sm">
-                              <div>
-                                <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
-                                <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
-                              </div>
-                              <Switch
-                                checked={skipPermissions}
-                                onChange={setSkipPermissions}
-                                className={skipPermissions ? "!bg-orange-600" : ""}
-                                thumbContent={<Zap className={`w-2.5 h-2.5 transition-colors ${skipPermissions ? 'text-orange-600' : 'text-gray-400'}`} />}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Appearance Tab */}
-                      {activeTab === 'appearance' && (
-                        <div className="space-y-8">
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-foreground">
-                              <Moon className="w-4 h-4 text-purple-500" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider">Visuals</h3>
-                            </div>
-                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
-                              <div>
-                                <div className="text-sm font-medium">Dark Mode</div>
-                                <div className="text-xs text-muted-foreground mt-0.5">Toggle interface theme</div>
-                              </div>
-                              <Switch
-                                checked={isDarkMode}
-                                onChange={toggleDarkMode}
-                                thumbContent={isDarkMode ? <Moon className="w-2.5 h-2.5 text-blue-600" /> : <Sun className="w-2.5 h-2.5 text-yellow-500" />}
-                              />
-                            </div>
-
-                            <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left shadow-sm">
-                              <div>
-                                <div className="text-sm font-medium">Project Sorting</div>
-                                <div className="text-xs text-muted-foreground mt-0.5">Order of items in sidebar</div>
-                              </div>
-                              <ModernSelect
-                                id="sort-select"
-                                value={projectSortOrder}
-                                onChange={setProjectSortOrder}
-                                options={availableSorts}
-                                placeholder="Sort Order"
-                                className="w-44"
-                                isOpen={showSortDropdown}
-                                setIsOpen={setShowSortDropdown}
-                                dropdownRef={sortDropdownRef}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Tools Tab */}
-                      {activeTab === 'tools' && (
-                        <div className="space-y-8">
-
-
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-foreground">
-                                <Unlock className="w-4 h-4 text-green-500" />
-                                <h3 className="text-sm font-bold uppercase tracking-wider">Allowed Tools</h3>
-                              </div>
-                              <ToolQuickAdd 
-                                id="allowed-tools"
-                                isOpen={showAllowedDropdown}
-                                setIsOpen={setShowAllowedDropdown}
-                                dropdownRef={allowedDropdownRef}
-                                tools={commonTools}
-                                currentTools={allowedTools}
-                                onSelect={addAllowedTool}
-                                colorClass="green"
-                              />
-                            </div>
-                            <div className="space-y-3">
-                              <div className="flex gap-2">
-                                <Input
-                                  value={newAllowedTool}
-                                  onChange={(e) => setNewAllowedTool(e.target.value)}
-                                  placeholder='e.g., "Bash", "Write"'
-                                  className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
-                                  onKeyPress={(e) => e.key === 'Enter' && addAllowedTool(newAllowedTool)}
-                                />
-                                <Button size="sm" onClick={() => addAllowedTool(newAllowedTool)} disabled={!newAllowedTool} className="rounded-xl h-10 w-10 p-0 shadow-lg shadow-blue-500/10">
-                                  <Plus className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
-                                {allowedTools.map(tool => (
-                                  <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-green-500/30 bg-green-500/20 dark:bg-green-500/30 text-green-800 dark:text-green-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
-                                    {tool}
-                                    <button onClick={() => removeAllowedTool(tool)} className="p-0.5 hover:bg-green-500/30 rounded-full transition-colors">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </Badge>
-                                ))}
-                                {allowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-allowed</p>}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-foreground">
-                                <Lock className="w-4 h-4 text-red-500" />
-                                <h3 className="text-sm font-bold uppercase tracking-wider">Disallowed Tools</h3>
-                              </div>
-                              <ToolQuickAdd 
-                                id="blocked-tools"
-                                isOpen={showDisallowedDropdown}
-                                setIsOpen={setShowDisallowedDropdown}
-                                dropdownRef={disallowedDropdownRef}
-                                tools={commonTools}
-                                currentTools={disallowedTools}
-                                onSelect={addDisallowedTool}
-                                colorClass="red"
-                              />
-                            </div>
-                            <div className="space-y-3">
-                              <div className="flex gap-2">
-                                <Input
-                                  value={newDisallowedTool}
-                                  onChange={(e) => setNewDisallowedTool(e.target.value)}
-                                  placeholder='e.g., "Bash(rm:*)"'
-                                  className="h-10 bg-muted/50 border-border/50 focus:bg-background rounded-xl transition-all"
-                                  onKeyPress={(e) => e.key === 'Enter' && addDisallowedTool(newDisallowedTool)}
-                                />
-                                <Button size="sm" onClick={() => addDisallowedTool(newDisallowedTool)} disabled={!newDisallowedTool} className="rounded-xl h-10 w-10 p-0 variant-outline border border-red-500/30 hover:bg-red-500/10">
-                                  <Plus className="w-4 h-4" />
-                                </Button>
-                              </div>
-                              <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-muted/60 border border-border/80 min-h-[60px] shadow-inner">
-                                {disallowedTools.map(tool => (
-                                  <Badge key={tool} variant="secondary" className="pl-3 pr-1 py-1.5 gap-1 border border-red-500/30 bg-red-500/20 dark:bg-red-500/30 text-red-800 dark:text-red-200 rounded-full shadow-sm hover:scale-105 transition-transform cursor-default">
-                                    {tool}
-                                    <button onClick={() => removeDisallowedTool(tool)} className="p-0.5 hover:bg-red-500/30 rounded-full transition-colors">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </Badge>
-                                ))}
-                                {disallowedTools.length === 0 && <p className="text-xs text-muted-foreground italic flex items-center justify-center w-full">No tools auto-blocked</p>}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="p-6 bg-blue-500/15 border border-blue-500/30 rounded-2xl space-y-3 text-left shadow-sm">
-                            <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tight flex items-center gap-2">
-                              <HelpCircle className="w-4 h-4" /> Tool Pattern Help
-                            </h4>
-                            <div className="text-xs text-muted-foreground leading-relaxed">
-                              Use patterns like <code className="text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/20">Bash(git log:*)</code> to allow specific commands without full YOLO mode.
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* MCP Tab */}
-                      {activeTab === 'mcp' && (
-                        <div className="space-y-8">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-foreground">
-                              <Server className="w-4 h-4 text-blue-500" />
-                              <h3 className="text-sm font-bold uppercase tracking-wider">MCP Servers</h3>
-                            </div>
-                            <Button size="sm" onClick={() => openMcpForm()} className="rounded-lg h-8 px-3 text-xs">
-                              Add Server
-                            </Button>
-                          </div>
-
+            {/* Mobile Horizontal Icon Navigation */}
+            {isMobile && (
+              <div className="z-50 bg-background/95 backdrop-blur-2xl border-b border-border/10 px-4 py-3 flex items-center justify-between flex-shrink-0">
+                <h2 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-400">
+                  Settings
+                </h2>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-full border border-border/50">
+                    {tabItems.map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <motion.button
+                          key={item.id}
+                          layout
+                          onClick={() => scrollToSection(item.id)}
+                          className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300 ${
+                            isActive ? 'text-white' : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.div
+                              layoutId="active-pill-settings"
+                              className="absolute inset-0 bg-blue-600 rounded-full -z-10 shadow-lg shadow-blue-500/20"
+                              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            />
+                          )}
+                          <span className={isActive ? 'text-white' : ''}>{item.icon}</span>
                           <AnimatePresence mode="wait">
-                            {showMcpForm ? (
-                              <motion.form
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                onSubmit={handleMcpSubmit}
-                                className="bg-muted/30 border border-border/50 rounded-2xl p-6 space-y-6 text-left"
+                            {isActive && (
+                              <motion.span
+                                initial={{ width: 0, opacity: 0 }}
+                                animate={{ width: "auto", opacity: 1 }}
+                                exit={{ width: 0, opacity: 0 }}
+                                className="overflow-hidden whitespace-nowrap"
                               >
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-foreground/90">Server Name</label>
-                                    <Input
-                                      value={mcpFormData.name}
-                                      onChange={(e) => setMcpFormData({ ...mcpFormData, name: e.target.value })}
-                                      className="h-9 border-border/50 bg-background"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-foreground/90">Transport</label>
-                                    <select
-                                      value={mcpFormData.type}
-                                      onChange={(e) => setMcpFormData({ ...mcpFormData, type: e.target.value })}
-                                      className="w-full h-9 px-2 bg-background border border-border/50 rounded-lg text-sm outline-none"
-                                    >
-                                      <option value="stdio">stdio (Local)</option>
-                                      <option value="sse">sse (Remote)</option>
-                                    </select>
-                                  </div>
-                                </div>
-                                
-                                <div className="space-y-1.5">
-                                  <label className="text-xs font-bold text-foreground/90">
-                                    {mcpFormData.type === 'stdio' ? 'Command' : 'Endpoint URL'}
-                                  </label>
-                                  <Input
-                                    value={mcpFormData.type === 'stdio' ? mcpFormData.config.command : mcpFormData.config.url}
-                                    onChange={(e) => updateMcpConfig(mcpFormData.type === 'stdio' ? 'command' : 'url', e.target.value)}
-                                    className="h-9 border-border/50 bg-background"
-                                    placeholder={mcpFormData.type === 'stdio' ? 'e.g., node, python, etc.' : 'https://...'}
-                                    required
-                                  />
-                                </div>
-
-                                <div className="flex items-center gap-3 pt-2">
-                                  <Button type="submit" disabled={mcpLoading} className="flex-1 rounded-xl h-10 shadow-lg shadow-blue-500/20">
-                                    {mcpLoading ? 'Saving...' : editingMcpServer ? 'Update' : 'Add Server'}
-                                  </Button>
-                                  <Button type="button" variant="ghost" onClick={resetMcpForm} className="rounded-xl h-10 border border-border/50">
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </motion.form>
-                            ) : (
-                              <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="space-y-3"
-                              >
-                                {mcpServers.length === 0 ? (
-                                  <div className="text-center py-10 border-2 border-dashed border-border/10 rounded-2xl">
-                                    <Server className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-                                    <p className="text-sm text-muted-foreground">No MCP servers configured</p>
-                                  </div>
-                                ) : (
-                                  mcpServers.map(server => (
-                                    <div key={server.id} className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all text-left group shadow-sm">
-                                      <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-background border border-border/50 rounded-lg group-hover:bg-blue-600/10 group-hover:border-blue-500/30 transition-colors">
-                                          {getTransportIcon(server.type)}
-                                        </div>
-                                        <div>
-                                          <div className="text-sm font-medium">{server.name}</div>
-                                          <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{server.type}</div>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => openMcpForm(server)} className="p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground rounded-md transition-all">
-                                          <Edit3 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => handleMcpDelete(server.id, server.scope)} className="p-1.5 hover:bg-red-500/10 text-muted-foreground hover:text-red-500 rounded-md transition-all">
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </motion.div>
+                                {item.label}
+                              </motion.span>
                             )}
                           </AnimatePresence>
-                        </div>
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                  <button 
+                    onClick={onClose}
+                    className="p-2 hover:bg-muted rounded-full transition-colors text-muted-foreground hover:text-foreground"
+                    aria-label="Close settings"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+              <ScrollArea className="flex-1 h-full">
+                <div className="p-6">
+                  {isMobile ? (
+                    <div className="space-y-16 pb-24">
+                      <section ref={generalRef} className="scroll-mt-24">
+                        {renderGeneralContent()}
+                      </section>
+                      <section ref={toolsRef} className="scroll-mt-24">
+                        {renderToolsContent()}
+                      </section>
+                      <section ref={mcpRef} className="scroll-mt-24">
+                        {renderMcpContent()}
+                      </section>
+                      <section ref={appearanceRef} className="scroll-mt-24">
+                        {renderAppearanceContent()}
+                      </section>
+                    </div>
+                  ) : (
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {activeTab === 'general' && renderGeneralContent()}
+                        {activeTab === 'tools' && renderToolsContent()}
+                        {activeTab === 'mcp' && renderMcpContent()}
+                        {activeTab === 'appearance' && renderAppearanceContent()}
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
                 </div>
               </ScrollArea>
 
               {/* Footer Actions */}
-              <div className="p-4 bg-muted/20 border-t border-border/50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AnimatePresence>
-                    {saveStatus === 'success' && (
-                      <motion.div
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="text-xs font-medium text-green-500 flex items-center gap-1"
-                      >
-                        <Shield className="w-3 h-3" /> Settings auto-applied
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                <div className="flex items-center gap-2">
+              <div className={`p-4 bg-muted/20 border-t border-border/50 flex ${isMobile ? 'flex-col gap-4 items-center justify-center' : 'items-center justify-between'}`}>
+                {!isMobile && (
+                  <div className="flex items-center gap-2">
+                    <AnimatePresence>
+                      {saveStatus === 'success' && (
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0 }}
+                          className="text-xs font-medium text-green-500 flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Settings saved successfully
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+                <div className={`flex items-center ${isMobile ? 'w-full gap-3 justify-center' : 'gap-2'}`}>
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size={isMobile ? "lg" : "sm"}
                     onClick={onClose}
-                    className="rounded-xl h-9 px-4 text-xs font-medium hover:bg-muted"
+                    className={`${isMobile ? 'flex-1 max-w-[150px]' : ''} rounded-xl h-10 px-4 text-sm font-medium hover:bg-muted`}
                   >
                     Cancel
                   </Button>
                   <Button
-                    size="sm"
+                    size={isMobile ? "lg" : "sm"}
                     onClick={saveSettings}
                     disabled={isSaving}
-                    className="rounded-xl h-9 px-6 text-xs font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    className={`${isMobile ? 'flex-2 max-w-[200px]' : ''} rounded-xl h-10 px-8 text-sm font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all`}
                   >
                     {isSaving ? 'Applying...' : 'Save Changes'}
                   </Button>

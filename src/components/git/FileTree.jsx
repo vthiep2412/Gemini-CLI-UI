@@ -44,7 +44,7 @@ function Section({ title, icon, iconClass, count, children, defaultOpen = true, 
             transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
             className="overflow-hidden"
           >
-            <div className="pb-2">
+            <div className="pb-24 md:pb-2">
               {children}
             </div>
           </motion.div>

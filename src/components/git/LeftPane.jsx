@@ -11,9 +11,11 @@ import CommitInput from './CommitInput';
 import CommitDetail from './CommitDetail';
 import { useGitStore } from '../../hooks/gitStore';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useMobile } from '../../hooks/useMobile';
 
 export default function LeftPane() {
   const { isDarkMode } = useTheme();
+  const isMobile = useMobile();
   const selectedCommit = useGitStore(s => s.selectedCommit);
   const [commitHeight, setCommitHeight] = useState(220);
   const isResizing = useRef(false);
@@ -95,7 +97,8 @@ export default function LeftPane() {
               <FileTree />
             </div>
             <div 
-              className={`absolute bottom-0 left-0 right-0 z-20 border-t border-border flex flex-col
+              className={`absolute left-0 right-0 z-20 border-t border-border flex flex-col transition-all duration-300
+                ${isMobile ? 'bottom-[80px] mx-4 rounded-2xl border shadow-2xl' : 'bottom-0'}
                 ${isDarkMode ? 'bg-[var(--bg-base)]/95 backdrop-blur-md' : 'bg-white/98 backdrop-blur-sm shadow-[0_-4px_12px_rgba(0,0,0,0.03)]'}`}
               style={{ height: commitHeight }}
             >

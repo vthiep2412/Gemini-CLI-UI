@@ -6,7 +6,7 @@ This document outlines the architecture and layout for a dedicated **AI Review T
 
 This layout should be implemented in a new component: `src/components/AIReviewTab.jsx`.
 
-```text
+```txt
 +----------------------------------------------------------------------------------+
 | [Header: Gemini Code UI]          [Chat | IDE | Review* | Shell | Git | Preview] |
 +------------------------+------------------------------------+--------------------+
