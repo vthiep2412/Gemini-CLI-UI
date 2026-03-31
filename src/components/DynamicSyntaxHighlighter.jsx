@@ -6,38 +6,67 @@ export default function DynamicSyntaxHighlighter({ language, code, isDarkMode, s
   const [Highlighter, setHighlighter] = useState(null);
   const loadedLangs = useRef(new Set());
 
+  // Load core highlighter once on mount
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
+    (async () => {
       try {
         const prism = await import('react-syntax-highlighter/dist/esm/prism');
-        const HighlighterComponent = prism.PrismLight || prism.Prism;
-        const lang = language || '';
-        if (lang && !loadedLangs.current.has(lang) && HighlighterComponent?.registerLanguage) {
-          try {
-            let langModule = await import(`react-syntax-highlighter/dist/esm/languages/prism/${lang}`);
-            HighlighterComponent.registerLanguage(lang, langModule.default || langModule);
-          } catch {
-            // Fallback for HTML: Prism names HTML as 'markup'
-            if (lang === 'html') {
-              try {
-                let langModule = await import('react-syntax-highlighter/dist/esm/languages/prism/markup');
-                HighlighterComponent.registerLanguage('html', langModule.default || langModule);
-              } catch {
-                // ignore
-              }
-            }
-          }
-          loadedLangs.current.add(lang);
+        if (mounted) {
+          setHighlighter(() => prism.PrismLight || prism.Prism);
         }
-        if (mounted) setHighlighter(() => HighlighterComponent);
-      } catch {
+      } catch (err) {
         // ignore
       }
-    };
-    if (!Highlighter) load();
+    })();
     return () => { mounted = false; };
-  }, [language]);
+  }, []);
+
+  // Register language dynamically as needed
+  useEffect(() => {
+    if (!Highlighter || !language) return;
+
+    const lang = language.toLowerCase();
+    if (loadedLangs.current.has(lang)) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        if (Highlighter.registerLanguage) {
+          let loaded = false;
+          try {
+            // Using package-resolved path for Vite compatibility
+            const langModule = await import(/* @vite-ignore */ `react-syntax-highlighter/dist/esm/languages/prism/${lang}.js`);
+            Highlighter.registerLanguage(lang, langModule.default || langModule);
+            loaded = true;
+          } catch (err) {
+            // Fallback for HTML (Prism uses 'markup' name)
+            if (lang === 'html') {
+              try {
+                const langModule = await import(/* @vite-ignore */ 'react-syntax-highlighter/dist/esm/languages/prism/markup.js');
+                Highlighter.registerLanguage('html', langModule.default || langModule);
+                loaded = true;
+              } catch (innerErr) {
+                console.warn(`[SyntaxHighlighter] Failed to load HTML fallback:`, innerErr);
+              }
+            } else {
+                console.warn(`[SyntaxHighlighter] Failed to load language: ${lang}`, err);
+            }
+          }
+          if (mounted && loaded) {
+            loadedLangs.current.add(lang);
+            // Trigger re-render to apply the newly registered language
+            setHighlighter(prev => prev);
+          }
+        }
+      } catch (err) {
+        console.warn('[SyntaxHighlighter] Failed to load language:', err);
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [language, Highlighter]);
 
   if (!Highlighter) {
     return (

@@ -1,5 +1,11 @@
 // Load environment variables from .env file
 import fs from 'fs';
+
+// Silence DEP0040 Punycode deprecation warning from dependencies
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning' && warning.code === 'DEP0040') return;
+  console.warn(warning);
+});
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -165,6 +171,85 @@ async function setupProjectsWatcher() {
   }
 }
 
+// ─── Git folder watcher — broadcasts GIT_STATUS_CHANGED on real changes ───────
+// Map of projectPath → Promise<Watcher | null> (avoids duplicate initialization races)
+const gitWatchers = new Map();
+
+/**
+ * Initializes a file system watcher for a project's .git directory.
+ * Uses a Promise-based reservation to ensure only one watcher exists per path.
+ */
+function watchGitFolder(projectPath, projectName) {
+  // If a watcher task is already pending or completed for this path, just return it
+  if (gitWatchers.has(projectPath)) return gitWatchers.get(projectPath);
+
+  // Reserve the slot with an initialization promise
+  const watcherPromise = (async () => {
+    let gitDir;
+    try {
+      gitDir = path.join(projectPath, '.git');
+      await fsPromises.access(gitDir);
+    } catch {
+      // Not a git repo or no access: remove from map and return null
+      gitWatchers.delete(projectPath);
+      return null;
+    }
+
+    try {
+      const chokidar = (await import('chokidar')).default;
+      const watcher = chokidar.watch(gitDir, {
+        ignoreInitial: true,
+        persistent: true,
+        depth: 2,
+        ignored: [
+          /\/objects\//,
+          /\/lfs\//,
+          /\.lock$/,
+          /\/pack-/
+        ]
+      });
+
+      let gitDebounce;
+      const broadcast = () => {
+        clearTimeout(gitDebounce);
+        gitDebounce = setTimeout(() => {
+          const msg = JSON.stringify({ type: 'GIT_STATUS_CHANGED', project: projectName });
+          connectedClients.forEach(client => {
+            if (client.readyState === client.OPEN) client.send(msg);
+          });
+        }, 400); // 400ms debounce
+      };
+
+      watcher.on('all', broadcast).on('error', (err) => {
+        console.debug(`[GitWatcher] Error for ${projectPath}:`, err);
+      });
+
+      // Cleanup on close
+      const originalClose = watcher.close.bind(watcher);
+      watcher.close = async () => {
+        gitWatchers.delete(projectPath);
+        return originalClose();
+      };
+
+      return watcher;
+    } catch (err) {
+      gitWatchers.delete(projectPath);
+      console.debug(`[GitWatcher] Failed to setup chokidar for ${projectPath}:`, err);
+      return null;
+    }
+  })();
+
+  gitWatchers.set(projectPath, watcherPromise);
+  return watcherPromise;
+}
+
+async function unwatchGitFolder(projectPath) {
+  const watcherPromise = gitWatchers.get(projectPath);
+  if (watcherPromise) {
+    const watcher = await watcherPromise;
+    if (watcher) await watcher.close();
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -204,6 +289,8 @@ app.use('/api', validateApiKey);
 app.use('/api/auth', authRoutes);
 
 // Git API Routes (protected)
+app.locals.watchGitFolder = watchGitFolder;
+app.locals.unwatchGitFolder = unwatchGitFolder;
 app.use('/api/git', authenticateToken, gitRoutes);
 
 // MCP API Routes (protected)
@@ -292,6 +379,15 @@ app.delete('/api/projects/:projectName/sessions/:sessionId', authenticateToken, 
 app.delete('/api/projects/:projectName', authenticateToken, async (req, res) => {
   try {
     const { projectName } = req.params;
+
+    // Attempt to unwatch the git folder before deletion to prevent file handle issues on Windows
+    try {
+      const projectPath = await extractProjectDirectory(projectName);
+      await unwatchGitFolder(projectPath);
+    } catch (unwatchErr) {
+      console.debug(`[WatcherCleanup] Failed to unwatch ${projectName}:`, unwatchErr);
+    }
+
     await deleteProject(projectName);
     res.json({ success: true });
   } catch (error) {
@@ -1085,5 +1181,56 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown handler
+async function handleShutdown(signal) {
+  console.log(`\x1b[33m\n[Shutdown] Received ${signal}, closing watchers...\x1b[0m`);
+
+  // Stop accepting new connections
+  wss.close();
+
+  // Close all git watchers (awaiting any pending starts)
+  const watcherPromises = [];
+  for (const [projectPath, watcherPromise] of gitWatchers.entries()) {
+    watcherPromises.push((async () => {
+      try {
+        const watcher = await watcherPromise;
+        if (watcher && typeof watcher.close === 'function') {
+          await watcher.close();
+        }
+      } catch (e) {
+        console.debug(`[Shutdown] Error closing watcher for ${projectPath}:`, e);
+      }
+    })());
+  }
+  await Promise.allSettled(watcherPromises);
+  gitWatchers.clear();
+
+  // Close the projects watcher
+  if (projectsWatcher) {
+    await projectsWatcher.close();
+  }
+
+  // Close HTTP server and wait for existing connections
+  let shutdownTimer;
+  const timeoutPromise = new Promise((resolve) => {
+    shutdownTimer = setTimeout(resolve, 5000); // 5s timeout
+  });
+
+  const closePromise = new Promise((resolve, reject) => {
+    server.close((err) => {
+      clearTimeout(shutdownTimer);
+      err ? reject(err) : resolve();
+    });
+  }).catch((err) => console.log('\x1b[33m[Shutdown] Server close ignored error:\x1b[0m', err.message));
+
+  await Promise.race([closePromise, timeoutPromise]);
+
+  console.log('\x1b[32m[Shutdown] All watchers closed. Exiting.\x1b[0m');
+  process.exit(0);
+}
+
+process.on('SIGINT', () => handleShutdown('SIGINT').catch(console.error));
+process.on('SIGTERM', () => handleShutdown('SIGTERM').catch(console.error));
 
 startServer();

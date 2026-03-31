@@ -8,13 +8,13 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject }) =>
     { id: 'bookmark', label: 'Bookmark', icon: Bookmark },
     ...(selectedProject ? [
       { id: 'shell', label: 'Shell', icon: Terminal },
-      { id: 'files', label: 'Files', icon: FolderTree },
+      { id: 'ide', label: 'IDE', icon: FolderTree },
       { id: 'git', label: 'Git', icon: GitBranch },
     ] : []),
   ];
 
   return (
-    <nav className="flex items-center gap-1 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border border-white/20 dark:border-gray-700/50 p-1 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+    <nav className="flex items-center gap-1 bg-white/70 dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 p-1 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
       <AnimatePresence mode="popLayout">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -30,7 +30,7 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject }) =>
                 scale: 1.02,
                 backgroundColor: "rgba(59, 130, 246, 0.12)",
                 filter: "drop-shadow(0 0 2px rgba(59, 130, 246, 0.15))",
-                transition: { duration: 0.2 }
+                transition: { duration: 0.1 }
               }}
               whileTap={{ 
                 scale: 0.98,

@@ -48,7 +48,7 @@ function AppContent() {
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'files'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'ide'
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
@@ -303,7 +303,7 @@ function AppContent() {
           
           // Only switch to chat tab if we're not already on a session-supporting tab
           // This prevents forcing the user back to "chat" if they are in "shell" or "files"
-          if (activeTab === 'chat' || !['files', 'shell', 'git', 'preview'].includes(activeTab)) {
+          if (activeTab === 'chat' || !['ide', 'shell', 'git', 'preview'].includes(activeTab)) {
             if (activeTab !== 'chat') setActiveTab('chat');
           }
           return;
@@ -582,6 +582,7 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              activeTab={activeTab}
             />
           </div>
           <div 
@@ -634,18 +635,19 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              activeTab={activeTab}
             />
           </div>
         </div>
       )}
 
       {/* Main Content Area - Flexible */}
-      <div className="flex-1 flex flex-col min-w-0 relative h-full">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Persistent Top Bar (Header) */}
-        <header className="h-16 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-border flex-shrink-0 z-30">
-          <div className="h-full max-w-7xl mx-auto px-3 sm:px-4 grid grid-cols-3 items-center w-full">
+        <header className="h-16 bg-white/95 dark:bg-[#030711]/95 backdrop-blur-xl border-b border-border flex-shrink-0 z-30 relative shadow-sm">
+          <div className="h-full px-4 flex items-center justify-between w-full relative">
             {/* Left side: Project Info */}
-            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 z-10">
               {isMobile && (
                 <button
                   onClick={() => setSidebarOpen(true)}
@@ -671,7 +673,7 @@ function AppContent() {
                   <div>
                     <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
                       {activeTab === 'chat' && selectedSession ? selectedSession.summary : 
-                       activeTab === 'files' ? 'Project Files' : 
+                       activeTab === 'ide' ? 'Integrated Workspace' :
                        activeTab === 'git' ? 'Source Control' : 
                        activeTab === 'shell' ? 'Terminal' : selectedProject.displayName}
                     </h2>
@@ -684,18 +686,20 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Middle: Floating Nav (Centering Container) */}
-            <div className="flex justify-center">
-              <FloatingNav
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                isMobile={false}
-                selectedProject={selectedProject}
-              />
+            {/* Middle: Floating Nav (Absolute Centered) */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center pointer-events-none z-20">
+              <div className="pointer-events-auto">
+                <FloatingNav
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  isMobile={false}
+                  selectedProject={selectedProject}
+                />
+              </div>
             </div>
 
             {/* Right side: Actions/Status (Placeholder for future use) */}
-            <div className="flex justify-end items-center space-x-2">
+            <div className="flex justify-end items-center space-x-2 z-10">
               <div className="hidden sm:block">
                 {/* Status indicator or other actions could go here */}
               </div>
@@ -720,6 +724,7 @@ function AppContent() {
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
+          ws={ws}
         />
       </div>
 
@@ -753,6 +758,7 @@ function AppContent() {
           localStorage.setItem('autoScrollToBottom', JSON.stringify(value));
         }}
         isMobile={isMobile}
+        activeTab={activeTab}
       />
 
       {/* Tools Settings Modal */}

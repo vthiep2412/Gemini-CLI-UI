@@ -16,7 +16,7 @@ import ChatInterface from './ChatInterface';
 import FileTree from './FileTree';
 import CodeEditor from './CodeEditor';
 import Shell from './Shell';
-import GitPanel from './GitPanel';
+import GitPanelV2 from './git/GitPanelV2';
 
 // MainContent Component - Enhanced with Floating Nav Support
 function MainContent({ 
@@ -37,7 +37,8 @@ function MainContent({
   onShowSettings,         // Show tools settings panel
   autoExpandTools,        // Auto-expand tool accordions
   showRawParameters,      // Show raw parameters in tool accordions
-  autoScrollToBottom      // Auto-scroll to bottom when new messages arrive
+  autoScrollToBottom,      // Auto-scroll to bottom when new messages arrive
+  ws                       // WebSocket instance for real-time updates
 }) {
   const [editingFile, setEditingFile] = useState(null);
 
@@ -130,7 +131,7 @@ function MainContent({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0">
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -151,7 +152,7 @@ function MainContent({
           />
         </div>
 
-        <div className={`h-full overflow-hidden ${activeTab === 'files' ? 'block' : 'hidden'}`} data-panel="files">
+        <div className={`h-full flex flex-col overflow-hidden ${activeTab === 'ide' ? 'block' : 'hidden'}`} data-panel="ide">
           <FileTree selectedProject={selectedProject} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'shell' ? 'block' : 'hidden'}`}>
@@ -162,7 +163,7 @@ function MainContent({
           />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'git' ? 'block' : 'hidden'}`}>
-          <GitPanel selectedProject={selectedProject} isMobile={isMobile} />
+          <GitPanelV2 project={selectedProject} ws={ws} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`}>
           {/* <LivePreviewPanel /> */}

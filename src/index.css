@@ -95,6 +95,13 @@
     --ring: 221 83% 53%;
     --radius: 0.75rem;
     --header-height: 4rem;
+    --bg-base: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-muted: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --git-accent: #3b82f6;
+    --border-base: #e2e8f0;
   }
 
   .dark {
@@ -118,6 +125,15 @@
     --input: 216 34% 17%;
     --ring: 224 76% 48%;
     --header-height: 4rem;
+
+    /* Git UI Professional Theme */
+    --bg-base: #030711;
+    --bg-surface: #0a0f1e;
+    --bg-muted: #161b2c;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --git-accent: #3b82f6;
+    --border-base: #1e293b;
   }
 
   body {

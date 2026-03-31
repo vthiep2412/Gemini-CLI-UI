@@ -31,8 +31,10 @@ export default defineConfig(({ command, mode }) => {
         'react-router-dom',
         '@uiw/react-codemirror',
         'react-markdown',
-        'remark-gfm'
-      ]
+        'remark-gfm',
+        'react-window'
+      ],
+      exclude: ['react-syntax-highlighter']
     },
     build: {
       outDir: 'dist'

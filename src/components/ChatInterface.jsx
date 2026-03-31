@@ -27,9 +27,12 @@ import { MicButton } from './MicButton.jsx';
 import { api } from '../utils/api';
 import { playNotificationSound } from '../utils/notificationSound';
 import { useMessages } from '../contexts/MessageContext';
+import { useAuth } from '../contexts/AuthContext';
+import Avatar from './common/Avatar';
 
 // Memoized message component to prevent unnecessary re-renders
-const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFileOpen, onShowSettings, autoExpandTools, showRawParameters }) => {
+const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShowSettings, autoExpandTools, showRawParameters, createDiff }) => {
+  const { user } = useAuth();
   const isGrouped = prevMessage && prevMessage.type === message.type && 
                    prevMessage.type === 'assistant' && 
                    !prevMessage.isToolUse && !message.isToolUse;
@@ -101,9 +104,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
             </div>
           </div>
           {!isGrouped && (
-            <div className="hidden sm:flex w-8 h-8 bg-blue-600 rounded-full items-center justify-center text-white text-sm flex-shrink-0">
-              U
-            </div>
+            <Avatar name={user?.username || 'User'} email={user?.email} className="bg-blue-600 text-white" />
           )}
         </div>
       ) : (
@@ -1070,85 +1071,45 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
   const [visibleMessageCount, setVisibleMessageCount] = useState(100);
   const [geminiStatus, setGeminiStatus] = useState(null);
 
-
   // Memoized diff calculation to prevent recalculating on every render
   const createDiff = useMemo(() => {
     const cache = new Map();
+    const MAX_CACHE_SIZE = 100;
     return (oldStr, newStr) => {
-      const key = `${oldStr.length}-${newStr.length}-${oldStr.slice(0, 50)}`;
-      if (cache.has(key)) {
-        return cache.get(key);
+      // Use full content for cache key to avoid collisions
+      const cacheKey = `${oldStr || ''}\x00${newStr || ''}`;
+      if (cache.has(cacheKey)) return cache.get(cacheKey);
+
+      const diff = [];
+      const oldLines = (oldStr || '').split('\n');
+      const newLines = (newStr || '').split('\n');
+
+      // Simple line-based diff algorithm
+      let i = 0, j = 0;
+      while (i < oldLines.length || j < newLines.length) {
+        if (i < oldLines.length && j < newLines.length && oldLines[i] === newLines[j]) {
+          // Skip equal lines - only show changes in diff view
+          i++; j++;
+        } else if (i < oldLines.length && (j >= newLines.length || oldLines[i] !== newLines[j])) {
+          diff.push({ type: 'removed', content: oldLines[i] });
+          i++;
+        } else if (j < newLines.length) {
+          diff.push({ type: 'added', content: newLines[j] });
+          j++;
+        }
       }
       
-      const result = calculateDiff(oldStr, newStr);
-      cache.set(key, result);
-      if (cache.size > 100) {
+      // Evict oldest entry if cache is full
+      if (cache.size >= MAX_CACHE_SIZE) {
         const firstKey = cache.keys().next().value;
         cache.delete(firstKey);
       }
-      return result;
+      cache.set(cacheKey, diff);
+      return diff;
     };
   }, []);
 
-  // Load session messages from API
-  const loadSessionMessages = useCallback(async (projectName, sessionId) => {
-    if (!projectName || !sessionId) return [];
-    
-    setIsLoadingSessionMessages(true);
-    try {
-      const response = await api.sessionMessages(projectName, sessionId);
-      if (!response.ok) {
-        throw new Error('Failed to load session messages');
-      }
-      const data = await response.json();
-      return data.messages || [];
-    } catch (error) {
-      // console.error('Error loading session messages:', error);
-      return [];
-    } finally {
-      setIsLoadingSessionMessages(false);
-    }
-  }, []);
-
-  // Actual diff calculation function
-  const calculateDiff = (oldStr, newStr) => {
-    const oldLines = oldStr.split('\n');
-    const newLines = newStr.split('\n');
-    
-    // Simple diff algorithm - find common lines and differences
-    const diffLines = [];
-    let oldIndex = 0;
-    let newIndex = 0;
-    
-    while (oldIndex < oldLines.length || newIndex < newLines.length) {
-      const oldLine = oldLines[oldIndex];
-      const newLine = newLines[newIndex];
-      
-      if (oldIndex >= oldLines.length) {
-        // Only new lines remaining
-        diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
-        newIndex++;
-      } else if (newIndex >= newLines.length) {
-        // Only old lines remaining
-        diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
-        oldIndex++;
-      } else if (oldLine === newLine) {
-        // Lines are the same - skip in diff view (or show as context)
-        oldIndex++;
-        newIndex++;
-      } else {
-        // Lines are different
-        diffLines.push({ type: 'removed', content: oldLine, lineNum: oldIndex + 1 });
-        diffLines.push({ type: 'added', content: newLine, lineNum: newIndex + 1 });
-        oldIndex++;
-        newIndex++;
-      }
-    }
-    
-    return diffLines;
-  };
-
-  const convertSessionMessages = (rawMessages) => {
+    const convertSessionMessages = (rawMessages) => {
     const converted = [];
     const toolResults = new Map(); // Map tool_use_id to tool result
     
@@ -1302,13 +1263,19 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
             
             setIsLoadingSessionMessages(true);
             try {
-              const messages = await loadSessionMessages(selectedProject.name, selectedSession.id);
+              const messages = await api.sessionMessages(selectedProject.name, selectedSession.id);
               setSessionMessages(messages);
               if (autoScrollToBottom) {
                 setTimeout(() => scrollToBottom(), 200);
               }
             } catch (error) {
-              // Failed to load
+              console.error('Failed to load session messages:', error);
+              setSessionMessages([]);
+              setChatMessages([{
+                type: 'error',
+                content: 'Failed to load session messages. Please try refreshing.',
+                timestamp: new Date().toISOString()
+              }]);
             } finally {
               setIsLoadingSessionMessages(false);
             }
@@ -1326,7 +1293,7 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
     };
     
     loadMessages();
-  }, [selectedSession?.id, selectedProject?.name, loadSessionMessages, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
+  }, [selectedSession?.id, selectedProject?.name, scrollToBottom, isSystemSessionChange, autoScrollToBottom]);
 
   // Update chatMessages when convertedMessages changes
   useEffect(() => {
@@ -2265,11 +2232,12 @@ function ChatInterface({ selectedProject, selectedSession, onFileOpen, onInputFo
                   message={message}
                   index={index}
                   prevMessage={prevMessage}
-                  createDiff={createDiff}
+
                   onFileOpen={onFileOpen}
                   onShowSettings={onShowSettings}
                   autoExpandTools={autoExpandTools}
                   showRawParameters={showRawParameters}
+                  createDiff={createDiff}
                 />
               );
             })}

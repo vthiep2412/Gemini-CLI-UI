@@ -455,4 +455,4 @@ function FileTree({ selectedProject }) {
   );
 }
 
-export default FileTree;
+export default React.memo(FileTree);

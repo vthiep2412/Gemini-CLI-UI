@@ -65,6 +65,9 @@ function GitPanel({ selectedProject, isMobile }) {
     setIsLoading(true);
     try {
       const response = await authenticatedFetch(`/api/git/status?project=${encodeURIComponent(selectedProject.name)}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
       
       // console.log('Git status response:', data);
@@ -315,6 +318,8 @@ function GitPanel({ selectedProject, isMobile }) {
         case 'push':
           await handlePush();
           break;
+        default:
+          console.warn(`Unknown confirmAction type: ${type}`);
       }
     } catch (error) {
       console.error(`Error executing ${type}:`, error);
@@ -573,11 +578,10 @@ function GitPanel({ selectedProject, isMobile }) {
                   className={`${isMobile ? 'px-2 py-1 text-xs' : 'p-1'} hover:bg-red-100 dark:hover:bg-red-900 rounded text-red-600 dark:text-red-400 font-medium flex items-center gap-1`}
                   title="Discard changes"
                 >
-                  <Trash2 className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
+                  <Trash2 className="w-3 h-3" />
                   {isMobile && <span>Discard</span>}
-                </button>
-              )}
-              <span 
+              {/* Fetch button - show when ahead only or when diverged (secondary action) */}
+              {remoteStatus.ahead > 0 && (              <span
                 className={`inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold border ${
                   status === 'M' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800' :
                   status === 'A' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-200 dark:border-green-800' :
@@ -875,7 +879,12 @@ function GitPanel({ selectedProject, isMobile }) {
                         rows="3"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                            handleCommit();
+                            if (commitMessage.trim() && selectedFiles.size > 0) {
+                             setConfirmAction({
+                               type: 'commit',
+                               message: `Commit ${selectedFiles.size} file${selectedFiles.size !== 1 ? 's' : ''} with message: "${commitMessage.trim()}"?`
+                             });
+                           }
                           }
                         }}
                       />
