@@ -3,7 +3,6 @@ import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
-import ImageViewer from './ImageViewer';
 
 import { api } from '../utils/api';
 
@@ -52,7 +51,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
 
     // Set up periodic refresh (every 5 seconds if panel is active)
     const intervalId = setInterval(() => {
-      const filesPanel = document.querySelector('[data-panel="files"]');
+      const filesPanel = document.querySelector('[data-panel="files"], [data-panel="ide"]');
       if (filesPanel && !filesPanel.classList.contains('hidden')) {
         fetchFiles(true);
       }
@@ -157,6 +156,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
           variant="ghost"
           className={cn(
             "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
@@ -172,12 +172,14 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
               });
             } else {
               // Open file in editor
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect({
+                  name: item.name,
+                  path: item.path,
+                  projectPath: selectedProject.path,
+                  projectName: selectedProject.name
+                });
+              }
             }
           }}
         >
@@ -240,6 +242,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
         <div
           className={cn(
             "grid grid-cols-12 gap-2 p-2 hover:bg-accent cursor-pointer items-center",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
@@ -253,12 +256,14 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
                 projectName: selectedProject.name
               });
             } else {
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect({
+                  name: item.name,
+                  path: item.path,
+                  projectPath: selectedProject.path,
+                  projectName: selectedProject.name
+                });
+              }
             }
           }}
         >
@@ -302,6 +307,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
         <div
           className={cn(
             "flex items-center justify-between p-2 hover:bg-accent cursor-pointer",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
@@ -315,12 +321,14 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
                 projectName: selectedProject.name
               });
             } else {
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect({
+                  name: item.name,
+                  path: item.path,
+                  projectPath: selectedProject.path,
+                  projectName: selectedProject.name
+                });
+              }
             }
           }}
         >

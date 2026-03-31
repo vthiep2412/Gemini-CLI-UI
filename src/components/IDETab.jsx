@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';
-import { X, Save, Download, Maximize2, Minimize2, ChevronLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { X, ChevronLeft } from 'lucide-react';
 import FileTree from './FileTree';
 import { api } from '../utils/api';
 
-function IDETab({ selectedProject, isMobile }) {
+function IDETab({ selectedProject, isMobile, openFileFromChat }) {
   const [openFiles, setOpenFiles] = useState([]);
   const [activeFile, setActiveFile] = useState(null);
   const [fileContents, setFileContents] = useState({});
   const [fileLoading, setFileLoading] = useState({});
+  const [fileErrors, setFileErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [showEditorOnMobile, setShowEditorOnMobile] = useState(false);
+
+  // Handle files opened externally (e.g. from chat)
+  useEffect(() => {
+    if (openFileFromChat) {
+      handleFileSelect(openFileFromChat);
+    }
+  }, [openFileFromChat]);
 
   // Monitor system dark mode setting
   useEffect(() => {
@@ -54,7 +63,7 @@ function IDETab({ selectedProject, isMobile }) {
         setFileContents(prev => ({ ...prev, [file.path]: data.content }));
       } catch (error) {
         console.error('Error loading file:', error);
-        setFileContents(prev => ({ ...prev, [file.path]: `// Error loading file: ${error.message}` }));
+        setFileErrors(prev => ({ ...prev, [file.path]: error.message }));
       } finally {
         setFileLoading(prev => ({ ...prev, [file.path]: false }));
       }
@@ -92,33 +101,59 @@ function IDETab({ selectedProject, isMobile }) {
     }
   };
 
+  // Use refs to avoid stale closures in event listeners without re-binding
+  const activeFileRef = useRef(activeFile);
+  const fileContentsRef = useRef(fileContents);
+  const fileErrorsRef = useRef(fileErrors);
+  const isSavingRef = useRef(saving);
+
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+    fileContentsRef.current = fileContents;
+    fileErrorsRef.current = fileErrors;
+    isSavingRef.current = saving;
+  }, [activeFile, fileContents, fileErrors, saving]);
+
   const handleSave = async () => {
-    if (!activeFile) return;
+    const currentActive = activeFileRef.current;
+    if (!currentActive) return;
+
+    // Don't save if there was a load error or already saving
+    if (fileErrorsRef.current[currentActive.path]) {
+      toast.error('Cannot save file that failed to load');
+      return;
+    }
+
+    if (isSavingRef.current) return;
 
     setSaving(true);
     try {
-      const response = await api.saveFile(activeFile.projectName, activeFile.path, fileContents[activeFile.path]);
+      const contentToSave = fileContentsRef.current[currentActive.path] || '';
+      const response = await api.saveFile(currentActive.projectName, currentActive.path, contentToSave);
       if (!response.ok) throw new Error('Failed to save file');
-      // Could show a toast notification here
+      toast.success(`${currentActive.name} saved successfully`);
     } catch (error) {
       console.error('Error saving file:', error);
-      alert(`Error saving file: ${error.message}`);
+      toast.error(`Error saving file: ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle Ctrl+S / Cmd+S
+  // Handle Ctrl+S / Cmd+S globally, but safely using refs
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Only capture save if we have an active file open in the IDE
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
+        if (activeFileRef.current) {
+          e.preventDefault();
+          handleSave();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeFile, fileContents]);
+  }, []); // Empty deps, uses refs inside
 
   const getLanguage = (filename) => {
     const ext = filename?.split('.').pop()?.toLowerCase();
@@ -205,11 +240,21 @@ function IDETab({ selectedProject, isMobile }) {
                       <span className="text-muted-foreground">Loading {activeFile.name}...</span>
                     </div>
                   </div>
+                ) : activeFile && fileErrors[activeFile.path] ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background z-10 p-4">
+                    <div className="text-center text-destructive max-w-md">
+                      <div className="w-12 h-12 mb-3 mx-auto bg-destructive/10 rounded-full flex items-center justify-center">
+                        <X className="w-6 h-6" />
+                      </div>
+                      <h3 className="font-semibold mb-1">Failed to load file</h3>
+                      <p className="text-sm opacity-80">{fileErrors[activeFile.path]}</p>
+                    </div>
+                  </div>
                 ) : activeFile && (
                   <Editor
                     height="100%"
                     language={getLanguage(activeFile.name)}
-                    theme={isDarkMode ? 'vs-dark' : 'light'}
+                    theme={isDarkMode ? 'vs-dark' : 'vs'}
                     value={fileContents[activeFile.path] || ''}
                     onChange={handleEditorChange}
                     options={{

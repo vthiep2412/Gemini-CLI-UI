@@ -99,8 +99,8 @@ function Sidebar({
       if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
         return;
       }
+      // Prevent double invocation
       e.preventDefault();
-      e.stopPropagation();
       callback();
     };
   };

@@ -3,7 +3,21 @@ import { MessageSquare, Folder, Terminal, GitBranch, Bookmark, Globe } from 'luc
 
 function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject }) {
   // Detect dark mode
-  const isDarkMode = document.documentElement.classList.contains('dark');
+  const [isDarkMode, setIsDarkMode] = React.useState(
+    () => document.documentElement.classList.contains('dark')
+  );
+
+  React.useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.attributeName === 'class') {
+          setIsDarkMode(document.documentElement.classList.contains('dark'));
+        }
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, []);
   const navItems = [
     { id: 'chat', icon: MessageSquare, onClick: () => setActiveTab('chat') },
     { id: 'bookmark', icon: Bookmark, onClick: () => setActiveTab('bookmark') },
@@ -16,7 +30,7 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject })
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style>{`
         .mobile-nav-container {
           background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
         }
@@ -24,10 +38,10 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject })
           background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
         }
         @keyframes fadeInSlide {
-          from { opacity: 0; max-width: 0; transform: translateX(-5px); }
-          to { opacity: 1; max-width: 50px; transform: translateX(0); }
+          from { opacity: 0; transform: translateX(-5px); }
+          to { opacity: 1; transform: translateX(0); }
         }
-      `}} />
+      `}</style>
       <div 
         className={`mobile-nav-container fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 z-50 ios-bottom-safe transform transition-transform duration-300 ease-in-out shadow-lg ${
           isInputFocused ? 'translate-y-full' : 'translate-y-0'
