@@ -3,7 +3,7 @@
  * Textarea for commit message + AI generate + Commit / Commit & Push buttons.
  */
 import React, { useRef, useEffect } from 'react';
-import { Sparkles, Zap, Upload, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, CloudUpload, Loader2 } from 'lucide-react';
 import Tooltip from '../common/Tooltip';
 import { useGitStore } from '../../hooks/gitStore';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -137,7 +137,7 @@ export default function CommitInput() {
           {loadingState?.committing || loadingState?.pushing || loadingState?.pulling ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Synchronizing...</>
           ) : (
-            <><Upload className="w-3.5 h-3.5" /> Sync and Commit</>
+            <><CloudUpload className="w-3.5 h-3.5" />Commit & Sync </>
           )}
         </button>
       </div>
