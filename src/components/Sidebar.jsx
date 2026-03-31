@@ -95,12 +95,12 @@ function Sidebar({
   // Touch handler to prevent double-tap issues on iPad (only for buttons, not scroll areas)
   const handleTouchClick = (callback) => {
     return (e) => {
-      // Only prevent default for buttons/clickable elements, not scrollable areas
+      // Allow scrollable areas to be scrolled
       if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
         return;
       }
-      e.preventDefault();
-      e.stopPropagation();
+      // On mobile devices, let the native click event handle it to avoid duplicate triggers and animation issues
+      // Just call the callback, but avoid stopPropagation unless absolutely necessary
       callback();
     };
   };
@@ -987,9 +987,9 @@ function Sidebar({
                   <AnimatePresence initial={false}>
                     {isExpanded && (
                       <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
+                        initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                        animate={{ height: "auto", opacity: 1, overflow: "visible" }}
+                        exit={{ height: 0, opacity: 0, overflow: "hidden" }}
                         transition={{ duration: 0.3, ease: "easeInOut" }}
                         className="overflow-hidden"
                       >

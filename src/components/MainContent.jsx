@@ -13,8 +13,8 @@
 
 import React, { useState, useEffect } from 'react';
 import ChatInterface from './ChatInterface';
-import FileTree from './FileTree';
-import CodeEditor from './CodeEditor';
+import IDETab from './IDETab';
+
 import Shell from './Shell';
 import GitPanelV2 from './git/GitPanelV2';
 
@@ -153,7 +153,7 @@ function MainContent({
         </div>
 
         <div className={`h-full flex flex-col overflow-hidden ${activeTab === 'ide' ? 'block' : 'hidden'}`} data-panel="ide">
-          <FileTree selectedProject={selectedProject} />
+          <IDETab selectedProject={selectedProject} isMobile={isMobile} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'shell' ? 'block' : 'hidden'}`}>
           <Shell 
@@ -176,14 +176,7 @@ function MainContent({
         </div>
       </div>
 
-      {/* Code Editor Modal */}
-      {editingFile && (
-        <CodeEditor
-          file={editingFile}
-          onClose={handleCloseEditor}
-          projectPath={selectedProject?.path}
-        />
-      )}
+
     </div>
   );
 }

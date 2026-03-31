@@ -9,57 +9,63 @@ function MobileNav({ activeTab, setActiveTab, isInputFocused, selectedProject })
     { id: 'bookmark', icon: Bookmark, onClick: () => setActiveTab('bookmark') },
     ...(selectedProject ? [
       { id: 'shell', icon: Terminal, onClick: () => setActiveTab('shell') },
-      { id: 'files', icon: Folder, onClick: () => setActiveTab('files') },
+      { id: 'ide', icon: Folder, onClick: () => setActiveTab('ide') },
       { id: 'git', icon: GitBranch, onClick: () => setActiveTab('git') }
     ] : [])
   ];
 
   return (
     <>
-      <style>
-        {`
-          .mobile-nav-container {
-            background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
-          }
-          .mobile-nav-container:hover {
-            background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
-          }
-        `}
-      </style>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .mobile-nav-container {
+          background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
+        }
+        .mobile-nav-container:hover {
+          background-color: ${isDarkMode ? '#1f2937' : '#ffffff'} !important;
+        }
+        @keyframes fadeInSlide {
+          from { opacity: 0; max-width: 0; transform: translateX(-5px); }
+          to { opacity: 1; max-width: 50px; transform: translateX(0); }
+        }
+      `}} />
       <div 
         className={`mobile-nav-container fixed bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-700 z-50 ios-bottom-safe transform transition-transform duration-300 ease-in-out shadow-lg ${
           isInputFocused ? 'translate-y-full' : 'translate-y-0'
         }`}
       >
-      <div className="flex items-center justify-around py-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          
-          return (
-            <button
-              key={item.id}
-              onClick={item.onClick}
-              onTouchStart={(e) => {
-                e.preventDefault();
-                item.onClick();
-              }}
-              className={`flex items-center justify-center p-2 rounded-lg min-h-[40px] min-w-[40px] relative touch-manipulation ${
-                isActive
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              }`}
-              aria-label={item.id}
-            >
-              <Icon className="w-5 h-5" />
-              {isActive && (
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-6 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
-              )}
-            </button>
-          );
-        })}
+        <div className="flex items-center justify-around py-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={item.onClick}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  item.onClick();
+                }}
+                className={`flex items-center gap-1.5 justify-center p-2 rounded-full relative touch-manipulation transition-all duration-300 ${
+                  isActive
+                    ? 'bg-blue-600/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400 px-4'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white min-w-[40px]'
+                }`}
+                aria-label={item.id}
+              >
+                <Icon className="w-5 h-5 flex-shrink-0" />
+                {isActive && (
+                  <span className="text-sm font-medium capitalize overflow-hidden whitespace-nowrap" style={{
+                    animation: 'fadeInSlide 0.3s ease-out forwards'
+                  }}>
+                    {item.id}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
     </>
   );
 }

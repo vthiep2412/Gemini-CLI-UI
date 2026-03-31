@@ -3,15 +3,13 @@ import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
-import CodeEditor from './CodeEditor';
-import ImageViewer from './ImageViewer';
+
 import { api } from '../utils/api';
 
-function FileTree({ selectedProject }) {
+function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState(new Set());
-  const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [viewMode, setViewMode] = useState('detailed'); // 'simple', 'detailed', 'compact'
   const [lastRefresh, setLastRefresh] = useState(Date.now());
@@ -435,16 +433,7 @@ function FileTree({ selectedProject }) {
         )}
       </ScrollArea>
       
-      {/* Code Editor Modal */}
-      {selectedFile && (
-        <CodeEditor
-          file={selectedFile}
-          onClose={() => setSelectedFile(null)}
-          projectPath={selectedFile.projectPath}
-        />
-      )}
-      
-      {/* Image Viewer Modal */}
+{/* Image Viewer Modal */}
       {selectedImage && (
         <ImageViewer
           file={selectedImage}
