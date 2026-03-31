@@ -283,7 +283,7 @@ function Sidebar({
   });
 
   // Touch handler to prevent double-tap issues on iPad (only for buttons, not scroll areas)
-  const handleTouchClick = (callback) => {
+  const handleTouchClick = useCallback((callback) => {
     return (e) => {
       // Only prevent default for buttons/clickable elements, not scrollable areas
       if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
@@ -293,7 +293,7 @@ function Sidebar({
       e.stopPropagation();
       callback();
     };
-  };
+  }, []);
 
   // Clear additional sessions when projects list changes (e.g., after refresh)
   useEffect(() => {
@@ -473,7 +473,37 @@ function Sidebar({
     setEditingName('');
   };
 
-  const deleteSession = async (projectName, sessionId) => {
+  const updateSessionSummary = useCallback(async (projectName, sessionId, newSummary) => {
+    if (!newSummary.trim()) {
+      alert("Session name cannot be empty");
+      return;
+    }
+
+    try {
+      const response = await api.updateSessionSummary(projectName, sessionId, newSummary.trim());
+
+      if (response.ok) {
+        setEditingSession(null);
+        setEditingSessionName('');
+
+        // Refresh to show updated name
+        if (window.refreshProjects) {
+          window.refreshProjects();
+        } else {
+          window.location.reload();
+        }
+      } else {
+        const error = await response.json();
+        console.error('Failed to update session:', error);
+        alert(error.error || 'Failed to update session name');
+      }
+    } catch (error) {
+      console.error('Error updating session:', error);
+      alert('Error updating session. Please try again.');
+    }
+  }, []);
+
+  const deleteSession = useCallback(async (projectName, sessionId) => {
     if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
       return;
     }
@@ -494,7 +524,7 @@ function Sidebar({
       console.error('Error deleting session:', error);
       alert('Error deleting session. Please try again.');
     }
-  };
+  }, [onSessionDelete]);
 
   const deleteProject = async (projectName) => {
     if (!confirm('Are you sure you want to delete this empty project? This action cannot be undone.')) {
