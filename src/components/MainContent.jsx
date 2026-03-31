@@ -13,8 +13,8 @@
 
 import React, { useState, useEffect } from 'react';
 import ChatInterface from './ChatInterface';
-import FileTree from './FileTree';
-import CodeEditor from './CodeEditor';
+import IDETab from './IDETab';
+
 import Shell from './Shell';
 import GitPanelV2 from './git/GitPanelV2';
 
@@ -40,21 +40,19 @@ function MainContent({
   autoScrollToBottom,      // Auto-scroll to bottom when new messages arrive
   ws                       // WebSocket instance for real-time updates
 }) {
-  const [editingFile, setEditingFile] = useState(null);
+  const [openFileFromChat, setOpenFileFromChat] = useState(null);
+
 
   const handleFileOpen = (filePath, diffInfo = null) => {
-    // Create a file object that CodeEditor expects
     const file = {
       name: filePath.split('/').pop(),
       path: filePath,
       projectName: selectedProject?.name,
-      diffInfo: diffInfo // Pass along diff information if available
+      diffInfo: diffInfo
     };
-    setEditingFile(file);
-  };
-
-  const handleCloseEditor = () => {
-    setEditingFile(null);
+    setOpenFileFromChat(file);
+    // Auto-switch to IDE tab if desired, or let user click it. For a better UX, maybe switch automatically:
+    setActiveTab('ide');
   };
   if (isLoading) {
     return (
@@ -153,7 +151,7 @@ function MainContent({
         </div>
 
         <div className={`h-full flex flex-col overflow-hidden ${activeTab === 'ide' ? 'block' : 'hidden'}`} data-panel="ide">
-          <FileTree selectedProject={selectedProject} />
+          <IDETab selectedProject={selectedProject} isMobile={isMobile} openFileFromChat={openFileFromChat} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'shell' ? 'block' : 'hidden'}`}>
           <Shell 
@@ -176,14 +174,7 @@ function MainContent({
         </div>
       </div>
 
-      {/* Code Editor Modal */}
-      {editingFile && (
-        <CodeEditor
-          file={editingFile}
-          onClose={handleCloseEditor}
-          projectPath={selectedProject?.path}
-        />
-      )}
+
     </div>
   );
 }

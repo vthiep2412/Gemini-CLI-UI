@@ -3,15 +3,14 @@ import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Eye } from 'lucide-react';
 import { cn } from '../lib/utils';
-import CodeEditor from './CodeEditor';
-import ImageViewer from './ImageViewer';
-import { api } from '../utils/api';
 
-function FileTree({ selectedProject }) {
+import { api } from '../utils/api';
+import ImageViewer from './ImageViewer';
+
+function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState(new Set());
-  const [selectedFile, setSelectedFile] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [viewMode, setViewMode] = useState('detailed'); // 'simple', 'detailed', 'compact'
   const [lastRefresh, setLastRefresh] = useState(Date.now());
@@ -53,7 +52,7 @@ function FileTree({ selectedProject }) {
 
     // Set up periodic refresh (every 5 seconds if panel is active)
     const intervalId = setInterval(() => {
-      const filesPanel = document.querySelector('[data-panel="files"]');
+      const filesPanel = document.querySelector('[data-panel="files"], [data-panel="ide"]');
       if (filesPanel && !filesPanel.classList.contains('hidden')) {
         fetchFiles(true);
       }
@@ -151,6 +150,13 @@ function FileTree({ selectedProject }) {
     return past.toLocaleDateString();
   };
 
+  const getFilePayload = (item) => ({
+    name: item.name,
+    path: item.path,
+    projectPath: selectedProject.path,
+    projectName: selectedProject.name
+  });
+
   const renderFileTree = (items, level = 0) => {
     return items.map((item) => (
       <div key={item.path} className="select-none">
@@ -158,6 +164,7 @@ function FileTree({ selectedProject }) {
           variant="ghost"
           className={cn(
             "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
@@ -165,20 +172,12 @@ function FileTree({ selectedProject }) {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
               // Open image in viewer
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
               // Open file in editor
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect(getFilePayload(item));
+              }
             }
           }}
         >
@@ -241,25 +240,18 @@ function FileTree({ selectedProject }) {
         <div
           className={cn(
             "grid grid-cols-12 gap-2 p-2 hover:bg-accent cursor-pointer items-center",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
             if (item.type === 'directory') {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect(getFilePayload(item));
+              }
             }
           }}
         >
@@ -303,25 +295,18 @@ function FileTree({ selectedProject }) {
         <div
           className={cn(
             "flex items-center justify-between p-2 hover:bg-accent cursor-pointer",
+            activeFilePath === item.path && "bg-accent text-accent-foreground",
           )}
           style={{ paddingLeft: `${level * 16 + 12}px` }}
           onClick={() => {
             if (item.type === 'directory') {
               toggleDirectory(item.path);
             } else if (isImageFile(item.name)) {
-              setSelectedImage({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              setSelectedImage(getFilePayload(item));
             } else {
-              setSelectedFile({
-                name: item.name,
-                path: item.path,
-                projectPath: selectedProject.path,
-                projectName: selectedProject.name
-              });
+              if (onFileSelect) {
+                onFileSelect(getFilePayload(item));
+              }
             }
           }}
         >
@@ -435,16 +420,7 @@ function FileTree({ selectedProject }) {
         )}
       </ScrollArea>
       
-      {/* Code Editor Modal */}
-      {selectedFile && (
-        <CodeEditor
-          file={selectedFile}
-          onClose={() => setSelectedFile(null)}
-          projectPath={selectedFile.projectPath}
-        />
-      )}
-      
-      {/* Image Viewer Modal */}
+{/* Image Viewer Modal */}
       {selectedImage && (
         <ImageViewer
           file={selectedImage}
