@@ -1,5 +1,11 @@
 // Load environment variables from .env file
 import fs from 'fs';
+
+// Silence DEP0040 Punycode deprecation warning from dependencies
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning' && warning.code === 'DEP0040') return;
+  console.warn(warning);
+});
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';

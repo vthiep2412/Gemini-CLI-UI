@@ -17,68 +17,70 @@ const BRANCH_COLORS = [
 ];
 
 function computeLanes(commits) {
-  // NOTE: Expects commits in topological order (children before parents).
-  // Passing unsorted commits will produce incorrect lane assignments.
   if (!commits || commits.length === 0) return [];
 
-  // Track which lanes are "active" (have an open branch tip)
-  // activeLanes[lane] = hash of the commit that opened it (its child)
-  const activeLanes = [];
-  // parentToLane: hash → lane (set when we process a commit's children)
+  // Track which lane each commit is assigned to
   const hashToLane = {};
-
-  const layout = commits.map((commit) => {
-    if (!commit) {
-      throw new Error('Commit element is null or undefined');
-    }
+  // Track which commit is currently occupying each lane (the 'tip' of a reserved path)
+  const activeLanes = [];
+  
+  const layout = commits.map((commit, idx) => {
     const { hash, parents = [] } = commit;
-    if (!hash) {
-      throw new Error('Commit missing required "hash" property');
-    }
+    
     let lane;
-
     if (hashToLane[hash] !== undefined) {
-      // This commit already has a lane reserved by its child
+      // Use the lane reserved for us by our child
       lane = hashToLane[hash];
     } else {
-      // Find the first free lane slot
-      lane = activeLanes.findIndex((h) => h === null || h === undefined);
+      // Find the first free lane slot or create a new one
+      lane = activeLanes.findIndex(h => h === null || h === undefined);
       if (lane === -1) lane = activeLanes.length;
     }
 
+    // Mark this lane as occupied by the current commit
     activeLanes[lane] = hash;
     const color = BRANCH_COLORS[lane % BRANCH_COLORS.length];
 
-    // Build edge descriptors for this commit
     const edges = [];
-
     parents.forEach((parentHash, pIdx) => {
-      // Validate parentHash exists before using it to avoid invalid edges/lanes
       if (!parentHash) return;
 
-      if (pIdx === 0) {
-        // First parent: continue in the same lane
-        if (hashToLane[parentHash] === undefined) {
-          hashToLane[parentHash] = lane;
-        }
-        edges.push({ fromLane: lane, toLane: hashToLane[parentHash] ?? lane, parentHash, type: 'direct' });
+      const isMerge = pIdx > 0;
+      let toLane;
+      let isSplit = false;
+
+      if (hashToLane[parentHash] !== undefined) {
+        // Parent already has a lane (from another child). This is a Split!
+        toLane = hashToLane[parentHash];
+        isSplit = true;
       } else {
-        // Merge parent: find or allocate a lane for it
-        let mergeLane = hashToLane[parentHash];
-        if (mergeLane === undefined) {
-          mergeLane = activeLanes.findIndex((h) => h === null || h === undefined);
-          if (mergeLane === -1) mergeLane = activeLanes.length;
-          hashToLane[parentHash] = mergeLane;
-          activeLanes[mergeLane] = parentHash;
+        // First child to claim this parent gets the current lane if possible
+        // but we only reuse the lane if it's the primary (first) parent line
+        if (!isMerge) {
+          toLane = lane;
+          hashToLane[parentHash] = lane;
+        } else {
+          // Alternative parent: find a new lane for it
+          toLane = activeLanes.findIndex(h => h === null || h === undefined);
+          if (toLane === -1) toLane = activeLanes.length;
+          hashToLane[parentHash] = toLane;
+          activeLanes[toLane] = parentHash; // Reserve it
         }
-        edges.push({ fromLane: lane, toLane: mergeLane, parentHash, type: 'merge' });
       }
+
+      edges.push({
+        fromLane: lane,
+        toLane,
+        parentHash,
+        type: isMerge ? 'merge' : 'direct',
+        isSplit
+      });
     });
 
-    // After processing, free the lane if it's not continued by the first parent
-    // (This happens if it's a root commit or if it merges into an existing lane)
-    const isContinued = parents.length > 0 && hashToLane[parents[0]] === lane;
-    if (!isContinued) {
+    // After processing a commit, we can potentially free its lane
+    // ONLY if it's not being continued by any of its parents
+    const continuingLanes = parents.map(p => hashToLane[p]);
+    if (!continuingLanes.includes(lane)) {
       activeLanes[lane] = null;
     }
 

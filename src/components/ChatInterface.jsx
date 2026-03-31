@@ -104,7 +104,7 @@ const MessageComponent = memo(({ message, index, prevMessage, onFileOpen, onShow
             </div>
           </div>
           {!isGrouped && (
-            <Avatar name={user?.username || 'User'} className="bg-blue-600 text-white" />
+            <Avatar name={user?.username || 'User'} email={user?.email} className="bg-blue-600 text-white" />
           )}
         </div>
       ) : (

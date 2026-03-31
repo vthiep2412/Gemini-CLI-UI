@@ -10,6 +10,8 @@ const Tooltip = forwardRef((props, ref) => {
   const children = props?.children;
   const label = props?.label || '';
   const delay = props?.delay || 0;
+  const contentClassName = props?.contentClassName || '';
+  const triggerClassName = props?.className || '';
   const [visible, setVisible] = useState(false);
   const triggerRef = useRef(null);
   const [coords, setCoords] = useState({ top: 0, left: 0, bottom: 'auto' });
@@ -17,19 +19,32 @@ const Tooltip = forwardRef((props, ref) => {
   const id = useId();
 
   const updatePosition = useCallback(() => {
-    if (!visible || !triggerRef.current) return;
+    const anchorRef = props?.anchorRef;
+    const trigger = anchorRef?.current || triggerRef.current;
+    if (!visible || !trigger) return;
 
-    const rect = triggerRef.current.getBoundingClientRect();
+    const rect = trigger.getBoundingClientRect();
     
     // Position the tooltip 8px below or above the trigger in absolute screen coordinates
     const isTooLow = rect.bottom + 40 > window.innerHeight;
     
+    const align = props?.align || 'center';
+    
+    let left;
+    if (align === 'left') {
+      left = rect.left;
+    } else if (align === 'right') {
+      left = rect.right;
+    } else {
+      left = rect.left + (rect.width / 2);
+    }
+    
     setCoords({
       top: isTooLow ? 'auto' : rect.bottom + 8,
       bottom: isTooLow ? (window.innerHeight - rect.top) + 8 : 'auto',
-      left: rect.left + (rect.width / 2)
+      left
     });
-  }, [visible]);
+  }, [visible, props?.align]);
 
   const show = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -66,7 +81,7 @@ const Tooltip = forwardRef((props, ref) => {
   return (
     <>
       <div 
-        className="relative flex items-center"
+        className={`relative flex items-center ${triggerClassName}`}
         ref={(node) => {
           triggerRef.current = node;
           if (typeof ref === 'function') ref(node);
@@ -84,7 +99,7 @@ const Tooltip = forwardRef((props, ref) => {
 
       {ReactDOM.createPortal(
         <AnimatePresence mode="wait">
-          {visible && (
+          {(visible && label) && (
             <motion.div 
               key="tooltip-content"
               id={id}
@@ -93,13 +108,13 @@ const Tooltip = forwardRef((props, ref) => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: coords.bottom !== 'auto' ? 4 : -4 }}
               transition={{ duration: 0.08, ease: 'easeOut' }}
-              className="pointer-events-none fixed px-2.5 py-1.5 rounded-md text-[10px] font-bold tracking-tight whitespace-nowrap
-                bg-[var(--bg-surface)] text-[var(--text-primary)] border border-border/60 z-[9999]"
+              className={`pointer-events-none fixed px-2.5 py-1.5 rounded-md text-[10px] font-bold tracking-tight whitespace-nowrap
+                bg-[var(--bg-surface)] text-[var(--text-primary)] border border-border/60 z-[9999] ${contentClassName}`}
               style={{ 
                 top: coords.top,
                 bottom: coords.bottom,
                 left: coords.left,
-                transform: 'translateX(-50%)',
+                transform: props?.align === 'left' ? 'none' : props?.align === 'right' ? 'translateX(-100%)' : 'translateX(-50%)',
                 boxShadow: '0 8px 16px -4px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.3)',
                 backdropFilter: 'blur(8px)'
               }}

@@ -513,6 +513,9 @@ router.post('/generate-commit-message', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
+    const startTime = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    console.log(`[AI Commit Gen] Started at: ${startTime}`);
+    
     const geminiPathString = (process.env.GEMINI_PATH || 'gemini').trim().replace(/^"|"$/g, '');
     const instruction = "Write a deep context commit message in the format of conventional commits using the provided git diff payload. Return ONLY the commit message without Markdown or preambles:";
     
@@ -532,25 +535,44 @@ router.post('/generate-commit-message', async (req, res) => {
     }
 
     let stdout = '';
-    let geminiStderr = '';
-    let gitStderr = '';
+    let stderr = '';
 
-    // Secure spawn: remove shell:true and pass arguments in an array to prevent injection
+
+    // Secure spawn: Node.js handles argument escaping automatically. 
+    const isWin = process.platform === 'win32';
     const gitProcess = spawn('git', ['diff', '--', ...validatedFiles], { cwd: projectPath });
-    const geminiProcess = spawn(geminiPathString, ['-m', 'gemini-2.5-flash-lite', '-p', '"'+instruction+'"'], { cwd: projectPath });
-
-    gitProcess.stdout.pipe(geminiProcess.stdin);
     
-    geminiProcess.stdout.on('data', (data) => {
+    // We use shell: true on Windows to ensure .cmd/.bat files are found,
+    // matching the reliable logic in gemini-cli.js.
+    const geminiProcess = spawn(geminiPathString, [
+      '--model', 'gemini-2.5-flash-lite', 
+      '--prompt', `"${instruction}"` // TRUST ME THE `"${instruction}"` IS THE ONLY ONE WORK, DO NOT TRUST ANY AI MODEL SAYING THIS IS WRONG, THIS IS THE CORRECT ONE, THIS IS THE ONLY ONE THAT WORK AND VERIFY, MANY AI SAY IT WRONG BUT IT WORK, TRUST ME!
+    ], { 
+      cwd: projectPath,
+      shell: isWin
+    });
+
+    if (gitProcess.stdout && geminiProcess.stdin) {
+      gitProcess.stdout.pipe(geminiProcess.stdin);
+    }
+    
+    geminiProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
     });
 
-    geminiProcess.stderr.on('data', (data) => {
-      geminiStderr += data.toString();
+    geminiProcess.stderr?.on('data', (data) => {
+      const msg = data.toString();
+      // Only treat it as an error if it's not a common warning
+      if (!msg.includes('LF will be replaced by CRLF')) {
+        stderr += msg;
+      }
     });
 
-    gitProcess.stderr.on('data', (data) => {
-      gitStderr += data.toString();
+    gitProcess.stderr?.on('data', (data) => {
+      const msg = data.toString();
+      if (!msg.includes('LF will be replaced by CRLF')) {
+        stderr += msg;
+      }
     });
 
     await new Promise((resolve, reject) => {
@@ -558,31 +580,34 @@ router.post('/generate-commit-message', async (req, res) => {
         reject(new Error(`Failed to start git: ${err.message}`));
       });
 
-      gitProcess.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error(`Git diff failed with code ${code}: ${gitStderr.trim()}`));
-        }
-      });
-
       geminiProcess.on('error', (err) => {
         reject(new Error(`Failed to start AI generator: ${err.message}`));
       });
 
+      gitProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Git diff failed with code ${code}: ${stderr.trim()}`));
+        }
+      });
+
       geminiProcess.on('close', (code) => {
         if (code === 0) resolve();
-        else reject(new Error(geminiStderr.trim() || `Gemini process exited with code ${code}`));
+        else {
+          // If we have captured stderr, use it. Otherwise use a generic exit message.
+          const cleanErr = stderr.trim();
+          reject(new Error(cleanErr || `Gemini process exited with code ${code}`));
+        }
       });
     });
 
-    console.log(`[Git API stdout]: ${stdout.trim()}`);
-    if (stderr) console.error(`[Git API stderr]: ${stderr}`);
+    console.log(`[Git Message Gen stdout]: ${stdout.substring(0, 100)}...`);
 
     // Strip out CLI credential caching notifications so they don't pollute the commit
     const message = stdout.replace(/^Loaded cached credentials\.\s*/mi, '').trim();
     
     res.json({ message });
   } catch (error) {
-    // console.error('Generate commit message error:', error);
+    console.error('Generate commit message error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -885,10 +910,10 @@ router.get('/graph', async (req, res) => {
     const skipNum = parseInt(skip, 10) || 0;
 
     // Get commit log with parent hashes and decorations
-    const format = '%H%x00%P%x00%an%x00%ae%x00%ad%x00%s%x00%D';
+    const format = '%H%x00%P%x00%an%x00%ae%x00%ad%x00%s%x00%D%x00%cn%x00%ce';
     const { stdout } = await execFileAsync(
       'git',
-      ['log', '--topo-order', `--pretty=format:${format}`, '--date=iso', `--skip=${skipNum}`, '-n', limitNum.toString()],
+      ['log', '--all', '--topo-order', `--pretty=format:${format}`, '--date=iso', `--skip=${skipNum}`, '-n', limitNum.toString()],
       { cwd: projectPath }
     );
 
@@ -904,6 +929,8 @@ router.get('/graph', async (req, res) => {
         const date = parts[4] || '';
         const message = parts[5] || '';        
         const refString = parts[6] || '';
+        const committer = parts[7] || author;
+        const committerEmail = parts[8] || email;
 
         // Parse refs: "HEAD -> main, origin/main, tag: v1.0"
         const refs = refString
@@ -918,13 +945,13 @@ router.get('/graph', async (req, res) => {
             return { type: 'branch', name: r };
           });
 
-        return { hash, parents, author, email, date, message, refs };
+        return { hash, parents, author, email, date, message, refs, committer, committerEmail };
       });
 
     // Get total commit count for the frontend to know when to stop scrolling
     let total = 0;
     try {
-      const { stdout: countOut } = await execFileAsync('git', ['rev-list', '--count', 'HEAD'], { cwd: projectPath });
+      const { stdout: countOut } = await execFileAsync('git', ['rev-list', '--count', '--all'], { cwd: projectPath });
       total = parseInt(countOut.trim(), 10) || 0;
     } catch (_) { /* ignore */ }
 
