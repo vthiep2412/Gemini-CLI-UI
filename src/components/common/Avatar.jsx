@@ -4,24 +4,29 @@ import React from 'react';
  * Common Avatar Component
  * Displays a GitHub profile picture with an initial-based fallback.
  * @param {string} name - The name or username to use for the avatar.
+ * @param {string} email - Email address for fallback avatar URL derivation.
  * @param {string} className - Additional CSS classes.
  */
-function Avatar({ name, email, className = "" }) {
+function Avatar({ name, email, className = "" }) {  
   const initial = (name || '?').charAt(0).toUpperCase();
 
-  // Improve username derivation:
-  // 1. Prefer email prefix if available
-  // 2. Remove GitHub ID prefix (e.g., 12345+username)
-  // 3. Fallback to first part of name
+  // Avatar URL derivation priority:
+  // 1. Use git username (name) directly — most likely to match a GitHub handle
+  // 2. Fall back to email local-part (remove GitHub ID prefix e.g. 12345+username)
+  // 3. Last resort: first word of name (handles "First Last" display names)
   let candidate = '';
-  if (email) {
-    candidate = email.split('@')[0];
-  } else if (name) {
-    candidate = name.split(' ')[0];
+  if (name && name.trim()) {
+    // Use the raw git username; if it's a display name (contains spaces),
+    // strip spaces so it can still be tried as a GitHub slug
+    candidate = name.trim().replace(/\s+/g, '');
   }
 
-  // Remove the "12345678+" prefix found in GitHub private emails
-  candidate = candidate.replace(/^\d+\+/, '');
+  if (!candidate && email) {
+    // Fall back to email local-part
+    candidate = email.split('@')[0];
+    // Remove the "12345678+" prefix found in GitHub noreply addresses
+    candidate = candidate.replace(/^\d+\+/, '');
+  }
   
   const username = candidate.toLowerCase().trim() || null;
 

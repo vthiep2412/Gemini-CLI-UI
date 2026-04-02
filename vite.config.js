@@ -29,7 +29,6 @@ export default defineConfig(({ command, mode }) => {
         'lucide-react',
         'framer-motion',
         'react-router-dom',
-        '@uiw/react-codemirror',
         'react-markdown',
         'remark-gfm',
         'react-window'

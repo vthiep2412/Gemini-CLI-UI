@@ -96,11 +96,13 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
 
   return (
     <div className="border-b border-border/30 last:border-0">
-      <button
-        type="button"
+    <div
+        role="button"
+        tabIndex={0}
         className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-[var(--bg-muted)]/40 text-xs cursor-pointer transition-all
           ${open ? 'bg-[var(--bg-muted)]/40' : ''}`}
         onClick={handleExpand}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleExpand(); } }}
       >
         <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded shadow-sm ${STATUS_CONFIG[file.status] || ''}`}>
           {file.status}
@@ -133,7 +135,7 @@ function FileDiffRow({ file, commitHash, selectedProject }) {
             <ChevronRight className="w-4 h-4" />
           </div>
         </div>
-      </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -277,9 +279,15 @@ export default function CommitDetail() {
                   const diffMs = now - d;
                   const isRecent = diffMs < 24 * 60 * 60 * 1000;
                   
-                  // Extract timezone from raw string (e.g. "+0700" -> "U+7")
-                  const tzMatch = dateStr.match(/([+-])(\d{2})(\d{1,2})$/);
-                  const tz = tzMatch ? `U${tzMatch[1]}${parseInt(tzMatch[2])}` : 'U+0';
+                  // Extract timezone from raw string (e.g. "+0700" -> "U+7", "+0530" -> "U+5:30")
+                  const tzMatch = dateStr.match(/([+-])(\d{2})(\d{2})?$/);
+                  let tz = 'U+0';
+                  if (tzMatch) {
+                    const sign = tzMatch[1];
+                    const hours = parseInt(tzMatch[2]);
+                    const minutes = tzMatch[3] ? parseInt(tzMatch[3]) : 0;
+                    tz = `U${sign}${hours}${minutes > 0 ? ':' + (minutes < 10 ? '0' + minutes : minutes) : ''}`;
+                  }
                   
                   const formatClean = (date) => {
                     return date.toLocaleDateString('en-US', {
@@ -293,6 +301,7 @@ export default function CommitDetail() {
                   };
                   
                   const getRelative = (ms) => {
+                    if (ms < 0) return 'just now';
                     const sec = Math.floor(ms / 1000);
                     if (sec < 60) return 'just now';
                     const min = Math.floor(sec / 60);

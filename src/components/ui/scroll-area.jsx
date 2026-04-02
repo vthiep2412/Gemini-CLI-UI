@@ -14,7 +14,6 @@ const ScrollArea = React.forwardRef(({ className, children, ...props }, ref) => 
         touchAction: 'pan-y'
       }} >
       {children}
-      <div id="idk"></div>
     </div>
   </div>
 ))

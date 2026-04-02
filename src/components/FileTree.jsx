@@ -1,424 +1,452 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { ScrollArea } from './ui/scroll-area';
-import { Button } from './ui/button';
-import { Folder, FolderOpen, File, FileText, FileCode, List, TableProperties, Eye } from 'lucide-react';
+import { List, TableProperties, Eye, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import { api } from '../utils/api';
 import ImageViewer from './ImageViewer';
+import FileIcon from './common/FileIcon';
+import { toast } from 'sonner';
 
-function FileTree({ selectedProject, onFileSelect, activeFilePath, ideMode }) {
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif']);
+const isImageFile = (filename) => {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return IMAGE_EXTENSIONS.has(ext);
+};
+
+// ─── Shared Item Row ─────────────────────────────────────────────────────────
+function FileRow({ 
+  item, 
+  level, 
+  isExpanded, 
+  activeFilePath, 
+  viewMode, 
+  onClickItem, 
+  onContextMenu,
+  isRenaming,
+  onRenameSubmit,
+  onRenameCancel,
+  formatFileSize, 
+  formatRelativeTime 
+}) {
+  const isDir = item.type === 'directory';
+  const indent = level * 18 + 12;
+  const [tempName, setTempName] = useState(item.name);
+
+  useEffect(() => { if (isRenaming) setTempName(item.name); }, [isRenaming, item.name]);
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter') onRenameSubmit(item, tempName);
+    if (e.key === 'Escape') onRenameCancel();
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onContextMenu={(e) => onContextMenu(e, item)}
+      className={cn(
+        'flex items-center gap-2.5 py-[4.5px] pr-2 rounded-sm cursor-pointer select-none group',
+        'hover:bg-[var(--bg-muted)]/40 transition-colors duration-100',
+        activeFilePath === item.path && 'bg-[var(--bg-muted)]/60 text-[var(--text-primary)]',
+        isRenaming && 'bg-[var(--bg-muted)]/80 ring-1 ring-[var(--git-accent)]/50'
+      )}
+      style={{ paddingLeft: `${indent}px` }}
+      onClick={() => !isRenaming && onClickItem(item)}
+    >
+      <FileIcon filename={item.name} isFolder={isDir} isOpen={isExpanded} size={19} className="flex-shrink-0" />
+
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {isRenaming ? (
+          <div className="flex items-center gap-1 w-full mr-2">
+            <input
+              autoFocus
+              className="flex-1 bg-[var(--bg-base)] border border-[var(--git-accent)]/50 rounded px-1.5 py-0.5 text-[14.5px] outline-none focus:ring-2 focus:ring-[var(--git-accent)]/20"
+              value={tempName}
+              onChange={(e) => setTempName(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              onBlur={(e) => {
+                // Don't cancel if focus moved to a related action button
+                if (!e.relatedTarget?.closest('[data-rename-action]')) {
+                  onRenameCancel();
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        ) : (
+          <>
+            <span className="text-[14.5px] truncate text-[var(--text-primary)] opacity-85 flex-1">
+              {item.name}
+            </span>
+            
+            {viewMode === 'compact' && !isDir && (
+              <span className="text-[11px] text-[var(--text-secondary)] opacity-50 flex-shrink-0 font-mono pr-2">
+                {formatFileSize(item.size)}
+              </span>
+            )}
+
+            {viewMode === 'detailed' && (
+              <>
+                <span className="text-[12px] text-[var(--text-secondary)] opacity-50 font-mono flex-shrink-0" style={{ width: 64 }}>
+                  {isDir ? '—' : formatFileSize(item.size)}
+                </span>
+                <span className="text-[12px] text-[var(--text-secondary)] opacity-50 flex-shrink-0" style={{ width: 88 }}>
+                  {formatRelativeTime(item.modified)}
+                </span>
+                <span className="text-[12px] text-[var(--text-secondary)] opacity-40 font-mono flex-shrink-0" style={{ width: 68 }}>
+                  {item.permissionsRwx || '—'}
+                </span>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom Context Menu ──────────────────────────────────────────────────
+function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
+  const menuRef = useRef(null);
+  const [adjustedPos, setAdjustedPos] = useState({ x, y });
+  const [isVisible, setIsVisible] = useState(false);
+
+  useLayoutEffect(() => {
+    if (menuRef.current) {
+      const menuWidth = menuRef.current.offsetWidth;
+      const menuHeight = menuRef.current.offsetHeight;
+      const margin = 12;
+      
+      const adjustedX = Math.min(x, window.innerWidth - menuWidth - margin);
+      const adjustedY = Math.min(y, window.innerHeight - menuHeight - margin);
+      
+      setAdjustedPos({ 
+        x: Math.max(margin, adjustedX), 
+        y: Math.max(margin, adjustedY) 
+      });
+      setIsVisible(true);
+    }
+  }, [x, y]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  return (
+    <motion.div
+      ref={menuRef}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: isVisible ? 1 : 0, scale: isVisible ? 1 : 0.95 }}
+      className="fixed z-[9999] min-w-[160px] p-1.5 rounded-lg shadow-2xl border border-white/5 backdrop-blur-md"
+      style={{ 
+        left: adjustedPos.x, 
+        top: adjustedPos.y,
+        // Deep Dark Blue inspired by VS Code "Activity Bar" but stays themed
+        backgroundColor: 'rgba(10, 20, 40, 0.95)', 
+        color: '#e2e8f0'
+      }}
+    >
+      <button
+        onClick={() => { onRename(item); onClose(); }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/10 rounded-md transition-colors text-left"
+      >
+        <Pencil className="w-3.5 h-3.5 opacity-60" /> Rename
+      </button>
+      <div className="h-px bg-white/5 my-1" />
+      <button
+        onClick={() => { onDelete(item); onClose(); }}
+        className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-500/20 text-red-400 rounded-md transition-colors text-left"
+      >
+        <Trash2 className="w-3.5 h-3.5 opacity-60" /> Delete
+      </button>
+    </motion.div>
+  );
+}
+
+function TreeNodes({ items, level = 0, expandedDirs, activeFilePath, viewMode, onClickItem, onContextMenu, renamingPath, onRenameSubmit, onRenameCancel, formatFileSize, formatRelativeTime }) {
+  return items.map((item) => (
+    <div key={item.path}>
+      <FileRow
+        item={item}
+        level={level}
+        isExpanded={expandedDirs.has(item.path)}
+        activeFilePath={activeFilePath}
+        viewMode={viewMode}
+        onClickItem={onClickItem}
+        onContextMenu={onContextMenu}
+        isRenaming={renamingPath === item.path}
+        onRenameSubmit={onRenameSubmit}
+        onRenameCancel={onRenameCancel}
+        formatFileSize={formatFileSize}
+        formatRelativeTime={formatRelativeTime}
+      />
+      <AnimatePresence initial={false}>
+        {item.type === 'directory' && expandedDirs.has(item.path) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+             {item.children?.length > 0 && (
+               <TreeNodes
+                items={item.children}
+                level={level + 1}
+                expandedDirs={expandedDirs}
+                activeFilePath={activeFilePath}
+                viewMode={viewMode}
+                onClickItem={onClickItem}
+                onContextMenu={onContextMenu}
+                renamingPath={renamingPath}
+                onRenameSubmit={onRenameSubmit}
+                onRenameCancel={onRenameCancel}
+                formatFileSize={formatFileSize}
+                formatRelativeTime={formatRelativeTime}
+              />
+             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ));
+}
+
+function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [expandedDirs, setExpandedDirs] = useState(new Set());
   const [selectedImage, setSelectedImage] = useState(null);
-  const [viewMode, setViewMode] = useState('simple'); // 'simple', 'detailed', 'compact'
-  const [lastRefresh, setLastRefresh] = useState(Date.now());
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('file-tree-view-mode') || 'simple'; } catch { return 'simple'; }
+  });
 
-  useEffect(() => {
-    if (selectedProject) {
-      fetchFiles();
-    }
-  }, [selectedProject]);
+  // Context Menu State
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const [renamingPath, setRenamingPath] = useState(null);
 
-  // Auto-refresh when files are created/modified
-  useEffect(() => {
-    if (!selectedProject) return;
+  const selectedProjectRef = useRef(selectedProject);
+  useEffect(() => { selectedProjectRef.current = selectedProject; }, [selectedProject]);
 
-    // Set up auto-refresh on file operations
-    const handleFileOperation = (event) => {
-      // Custom event triggered when files are created/modified
-      if (event.detail?.projectName === selectedProject.name) {
-        console.log('File operation detected, refreshing file tree...');
-        fetchFiles(true);
-      }
-    };
-
-    // Listen for file operation events
-    window.addEventListener('file-operation', handleFileOperation);
-    
-    // Also refresh when tab becomes visible
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && selectedProject) {
-        const timeSinceRefresh = Date.now() - lastRefresh;
-        // Only refresh if more than 2 seconds have passed
-        if (timeSinceRefresh > 2000) {
-          fetchFiles(true);
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Set up periodic refresh (every 5 seconds if panel is active)
-    const intervalId = setInterval(() => {
-      const filesPanel = document.querySelector('[data-panel="files"], [data-panel="ide"]');
-      if (filesPanel && !filesPanel.classList.contains('hidden')) {
-        fetchFiles(true);
-      }
-    }, 5000);
-
-    return () => {
-      window.removeEventListener('file-operation', handleFileOperation);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(intervalId);
-    };
-  }, [selectedProject, lastRefresh]);
-
-
-  const fetchFiles = async (isSilent = false) => {
-    if (!isSilent || files.length === 0) {
-      setLoading(true);
-    }
+  const fetchFiles = useCallback(async (isSilent = false) => {
+    const project = selectedProjectRef.current;
+    if (!project) return;
+    if (!isSilent) setLoading(true);
     try {
-      const response = await api.getFiles(selectedProject.name);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ File fetch failed:', response.status, errorText);
-        setFiles([]);
-        return;
-      }
-      
+      const response = await api.getFiles(project.name);
+      if (!response.ok) { setFiles([]); return; }
       const data = await response.json();
       setFiles(data);
-      setLastRefresh(Date.now());
-    } catch (error) {
-      console.error('❌ Error fetching files:', error);
+    } catch (err) {
+      console.error('❌ Error fetching files:', err);
       setFiles([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Expose refresh function globally for other components to trigger
   useEffect(() => {
-    if (selectedProject) {
-      window.refreshFileTree = () => {
-        console.log('Manual file tree refresh triggered');
-        fetchFiles(true);
-      };
-    }
-    return () => {
-      delete window.refreshFileTree;
-    };
-  }, [selectedProject]);
+    if (selectedProject) fetchFiles(false);
+    else setFiles([]);
+  }, [selectedProject, fetchFiles]);
 
-  const toggleDirectory = (path) => {
-    const newExpanded = new Set(expandedDirs);
-    if (newExpanded.has(path)) {
-      newExpanded.delete(path);
-    } else {
-      newExpanded.add(path);
-    }
-    setExpandedDirs(newExpanded);
+  useEffect(() => {
+    if (!selectedProject) return;
+    const onRefresh = () => fetchFiles(true);
+    window.addEventListener('refresh-file-tree', onRefresh);
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchFiles(true);
+      }
+    }, 12000);
+    return () => {
+      window.removeEventListener('refresh-file-tree', onRefresh);
+      clearInterval(intervalId);
+    };
+  }, [selectedProject, fetchFiles]);
+
+  const toggleDirectory = useCallback((path) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const handleContextMenu = (e, item) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY, item });
   };
 
-  // Change view mode and save preference
+  const startRename = (item) => {
+    setRenamingPath(item.path);
+  };
+
+  const handleRenameSubmit = async (item, newName) => {
+    if (!newName || newName === item.name) {
+      setRenamingPath(null);
+      return;
+    }
+
+    const oldPath = item.path;
+    const parent = oldPath.substring(0, oldPath.lastIndexOf(item.name));
+    const newPath = parent + newName;
+
+    try {
+      const res = await api.renameFile(selectedProject.name, oldPath, newPath);
+      if (!res.ok) throw new Error('Failed to rename');
+      toast.success('Renamed successfully');
+      fetchFiles(true);
+    } catch (err) {
+      console.error('Rename failed:', err);
+      toast.error('Error renaming file');
+    } finally {
+      setRenamingPath(null);
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (!window.confirm(`Delete ${item.name}? This cannot be undone.`)) return;
+
+    try {
+      const res = await api.deleteFile(selectedProject.name, item.path);
+      if (!res.ok) throw new Error('Failed to delete');
+      toast.success('Deleted successfully');
+      fetchFiles(true);
+    } catch (err) {
+      toast.error('Error deleting file');
+    }
+  };
+
+  const handleClickItem = useCallback((item) => {
+    if (item.type === 'directory') toggleDirectory(item.path);
+    else if (isImageFile(item.name)) {
+      setSelectedImage({
+        name: item.name,
+        path: item.path,
+        projectPath: selectedProjectRef.current?.path,
+        projectName: selectedProjectRef.current?.name,
+      });
+    } else {
+      onFileSelect?.({
+        name: item.name,
+        path: item.path,
+        projectPath: selectedProjectRef.current?.path,
+        projectName: selectedProjectRef.current?.name,
+      });
+    }
+  }, [toggleDirectory, onFileSelect]);
+
   const changeViewMode = (mode) => {
     setViewMode(mode);
-    localStorage.setItem('file-tree-view-mode', mode);
+    try { localStorage.setItem('file-tree-view-mode', mode); } catch { /* noop */ }
   };
 
-  // Format file size
   const formatFileSize = (bytes) => {
-    if (!bytes || bytes === 0) return '0 B';
+    if (!bytes || bytes <= 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Format date as relative time
   const formatRelativeTime = (date) => {
-    if (!date) return '-';
-    const now = new Date();
-    const past = new Date(date);
-    const diffInSeconds = Math.floor((now - past) / 1000);
-    
+    if (!date) return '—';
+    const diffInSeconds = Math.floor((Date.now() - new Date(date)) / 1000);
     if (diffInSeconds < 60) return 'just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
-    if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
-    return past.toLocaleDateString();
-  };
-
-  const getFilePayload = (item) => ({
-    name: item.name,
-    path: item.path,
-    projectPath: selectedProject.path,
-    projectName: selectedProject.name
-  });
-
-  const renderFileTree = (items, level = 0) => {
-    return items.map((item) => (
-      <div key={item.path} className="select-none">
-        <Button
-          variant="ghost"
-          className={cn(
-            "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent",
-            activeFilePath === item.path && "bg-accent text-accent-foreground",
-          )}
-          style={{ paddingLeft: `${level * 16 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'directory') {
-              toggleDirectory(item.path);
-            } else if (isImageFile(item.name)) {
-              // Open image in viewer
-              setSelectedImage(getFilePayload(item));
-            } else {
-              // Open file in editor
-              if (onFileSelect) {
-                onFileSelect(getFilePayload(item));
-              }
-            }
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0 w-full">
-            {item.type === 'directory' ? (
-              expandedDirs.has(item.path) ? (
-                <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
-              ) : (
-                <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              )
-            ) : (
-              getFileIcon(item.name)
-            )}
-            <span className="text-sm truncate text-foreground">
-              {item.name}
-            </span>
-          </div>
-        </Button>
-        
-        {item.type === 'directory' && 
-         expandedDirs.has(item.path) && 
-         item.children && 
-         item.children.length > 0 && (
-          <div>
-            {renderFileTree(item.children, level + 1)}
-          </div>
-        )}
-      </div>
-    ));
-  };
-
-  const isImageFile = (filename) => {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
-    return imageExtensions.includes(ext);
-  };
-
-  const getFileIcon = (filename) => {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    
-    const codeExtensions = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs'];
-    const docExtensions = ['md', 'txt', 'doc', 'pdf'];
-    const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp'];
-    
-    if (codeExtensions.includes(ext)) {
-      return <FileCode className="w-4 h-4 text-green-500 flex-shrink-0" />;
-    } else if (docExtensions.includes(ext)) {
-      return <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />;
-    } else if (imageExtensions.includes(ext)) {
-      return <File className="w-4 h-4 text-purple-500 flex-shrink-0" />;
-    } else {
-      return <File className="w-4 h-4 text-muted-foreground flex-shrink-0" />;
-    }
-  };
-
-  // Render detailed view with table-like layout
-  const renderDetailedView = (items, level = 0) => {
-    return items.map((item) => (
-      <div key={item.path} className="select-none">
-        <div
-          className={cn(
-            "grid grid-cols-12 gap-2 p-2 hover:bg-accent cursor-pointer items-center",
-            activeFilePath === item.path && "bg-accent text-accent-foreground",
-          )}
-          style={{ paddingLeft: `${level * 16 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'directory') {
-              toggleDirectory(item.path);
-            } else if (isImageFile(item.name)) {
-              setSelectedImage(getFilePayload(item));
-            } else {
-              if (onFileSelect) {
-                onFileSelect(getFilePayload(item));
-              }
-            }
-          }}
-        >
-          <div className="col-span-5 flex items-center gap-2 min-w-0">
-            {item.type === 'directory' ? (
-              expandedDirs.has(item.path) ? (
-                <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
-              ) : (
-                <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              )
-            ) : (
-              getFileIcon(item.name)
-            )}
-            <span className="text-sm truncate text-foreground">
-              {item.name}
-            </span>
-          </div>
-          <div className="col-span-2 text-sm text-muted-foreground">
-            {item.type === 'file' ? formatFileSize(item.size) : '-'}
-          </div>
-          <div className="col-span-3 text-sm text-muted-foreground">
-            {formatRelativeTime(item.modified)}
-          </div>
-          <div className="col-span-2 text-sm text-muted-foreground font-mono">
-            {item.permissionsRwx || '-'}
-          </div>
-        </div>
-        
-        {item.type === 'directory' && 
-         expandedDirs.has(item.path) && 
-         item.children && 
-         renderDetailedView(item.children, level + 1)}
-      </div>
-    ));
-  };
-
-  // Render compact view with inline details
-  const renderCompactView = (items, level = 0) => {
-    return items.map((item) => (
-      <div key={item.path} className="select-none">
-        <div
-          className={cn(
-            "flex items-center justify-between p-2 hover:bg-accent cursor-pointer",
-            activeFilePath === item.path && "bg-accent text-accent-foreground",
-          )}
-          style={{ paddingLeft: `${level * 16 + 12}px` }}
-          onClick={() => {
-            if (item.type === 'directory') {
-              toggleDirectory(item.path);
-            } else if (isImageFile(item.name)) {
-              setSelectedImage(getFilePayload(item));
-            } else {
-              if (onFileSelect) {
-                onFileSelect(getFilePayload(item));
-              }
-            }
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {item.type === 'directory' ? (
-              expandedDirs.has(item.path) ? (
-                <FolderOpen className="w-4 h-4 text-blue-500 flex-shrink-0" />
-              ) : (
-                <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              )
-            ) : (
-              getFileIcon(item.name)
-            )}
-            <span className="text-sm truncate text-foreground">
-              {item.name}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            {item.type === 'file' && (
-              <>
-                <span>{formatFileSize(item.size)}</span>
-                <span className="font-mono">{item.permissionsRwx}</span>
-              </>
-            )}
-          </div>
-        </div>
-        
-        {item.type === 'directory' && 
-         expandedDirs.has(item.path) && 
-         item.children && 
-         renderCompactView(item.children, level + 1)}
-      </div>
-    ));
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return new Date(date).toLocaleDateString();
   };
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-gray-500 dark:text-gray-400">
-          Loading files...
-        </div>
+        <div className="text-[var(--text-secondary)] text-[14px] animate-pulse">Loading files…</div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col" style={{ backgroundColor: '#0a0f1e' }}>
-      {/* View Mode Toggle */}
-      <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">Files</h3>
+    <div className="h-full flex flex-col bg-[var(--bg-base)] transition-colors duration-300 relative overflow-hidden">
+      {/* Toolbar */}
+      <div className="px-3 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
+        <h3 className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-secondary)] opacity-60">Files</h3>
         <div className="flex gap-1">
-          <Button
-            variant={viewMode === 'simple' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => changeViewMode('simple')}
-            title="Simple view"
-          >
-            <List className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'compact' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => changeViewMode('compact')}
-            title="Compact view"
-          >
-            <Eye className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'detailed' ? 'default' : 'ghost'}
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => changeViewMode('detailed')}
-            title="Detailed view"
-          >
-            <TableProperties className="w-4 h-4" />
-          </Button>
+          {[
+            { mode: 'simple',   Icon: List,            title: 'Simple view' },
+            { mode: 'compact',  Icon: Eye,             title: 'Compact view' },
+            { mode: 'detailed', Icon: TableProperties, title: 'Detailed view' },
+          ].map(({ mode, Icon, title }) => (
+            <button
+              key={mode}
+              title={title}
+              onClick={() => changeViewMode(mode)}
+              className={cn(
+                'p-1.5 rounded transition-all',
+                viewMode === mode
+                  ? 'bg-[var(--git-accent)]/15 text-[var(--git-accent)]'
+                  : 'text-[var(--text-secondary)] opacity-40 hover:opacity-80',
+              )}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Column Headers for Detailed View */}
       {viewMode === 'detailed' && files.length > 0 && (
-        <div className="px-4 pt-2 pb-1 border-b border-border">
-          <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
-            <div className="col-span-5">Name</div>
-            <div className="col-span-2">Size</div>
-            <div className="col-span-3">Modified</div>
-            <div className="col-span-2">Permissions</div>
-          </div>
+        <div className="px-3 py-1.5 border-b border-border/50 flex items-center flex-shrink-0">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40" style={{ flex: '5 1 0', paddingLeft: 30 }}>Name</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 64 }}>Size</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 88 }}>Modified</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 68 }}>Perms</span>
         </div>
       )}
-      
-      <ScrollArea className="flex-1 py-2 pl-2 pr-0.5">
+
+      <ScrollArea className="flex-1 py-2 pr-1 ml-0.5">
         {files.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-3">
-              <Folder className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <h4 className="font-medium text-foreground mb-1">No files found</h4>
-            <p className="text-sm text-muted-foreground">
-              Check if the project path is accessible
-            </p>
+          <div className="text-center py-10 px-4">
+            <FileIcon filename="folder" isFolder size={48} className="mx-auto mb-3 opacity-30" />
+            <p className="text-[14px] font-semibold text-[var(--text-secondary)] opacity-50">No files found</p>
           </div>
         ) : (
-          <div className={viewMode === 'detailed' ? '' : 'space-y-1'}>
-            {viewMode === 'simple' && renderFileTree(files)}
-            {viewMode === 'compact' && renderCompactView(files)}
-            {viewMode === 'detailed' && renderDetailedView(files)}
+          <div className="pb-8">
+            <TreeNodes
+              items={files}
+              expandedDirs={expandedDirs}
+              activeFilePath={activeFilePath}
+              viewMode={viewMode}
+              onClickItem={handleClickItem}
+              onContextMenu={handleContextMenu}
+              renamingPath={renamingPath}
+              onRenameSubmit={handleRenameSubmit}
+              onRenameCancel={() => setRenamingPath(null)}
+              formatFileSize={formatFileSize}
+              formatRelativeTime={formatRelativeTime}
+            />
           </div>
         )}
       </ScrollArea>
-      
-{/* Image Viewer Modal */}
-      {selectedImage && (
-        <ImageViewer
-          file={selectedImage}
-          onClose={() => setSelectedImage(null)}
+
+      {/* Context Menu Overlay */}
+      {ctxMenu && (
+        <ContextMenu
+          {...ctxMenu}
+          onRename={startRename}
+          onDelete={handleDelete}
+          onClose={() => setCtxMenu(null)}
         />
+      )}
+
+      {selectedImage && (
+        <ImageViewer file={selectedImage} onClose={() => setSelectedImage(null)} />
       )}
     </div>
   );

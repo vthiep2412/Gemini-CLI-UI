@@ -1311,25 +1311,25 @@ function Sidebar({
           {/* Mobile Settings */}
           <div className="md:hidden p-4 border-t border-border/50">
             <button
-              className="w-full h-14 bg-muted/50 hover:bg-muted/70 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-all duration-150"
+              className="w-full h-14 bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/40 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-all duration-300 shadow-sm border border-border"
               onClick={onShowSettings}
               onTouchEnd={handleTouchClick(onShowSettings)}
             >
-              <div className="w-10 h-10 rounded-2xl bg-background/80 flex items-center justify-center">
-                <Settings className="w-5 h-5 text-muted-foreground" />
+              <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                <Settings className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-lg font-medium text-foreground">Settings</span>
+              <span className="text-lg font-bold text-foreground">Settings</span>
             </button>
           </div>
           
           {/* Desktop Settings */}
           <Button
             variant="ghost"
-            className="hidden md:flex w-full justify-start gap-4 p-2 h-auto font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200 pl-6"
+            className="hidden md:flex w-full justify-start gap-4 p-3 h-auto font-bold text-foreground bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/40 transition-[background-color] duration-300 pl-6 rounded-xl group shadow-sm border border-border"
             onClick={onShowSettings}
             onTouchEnd={handleTouchClick(onShowSettings)}
           >
-            <Settings className="w-6 h-6" />
+            <Settings className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500 text-primary" />
             <span className="text-base">Settings</span>
           </Button>
         </div>

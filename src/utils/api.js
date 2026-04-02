@@ -70,12 +70,21 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ filePath, content }),
     }),
+  deleteFile: (projectName, filePath) =>
+    authenticatedFetch(`/api/projects/${projectName}/file?filePath=${encodeURIComponent(filePath)}`, {
+      method: 'DELETE',
+    }),
+  renameFile: (projectName, oldPath, newPath) =>
+    authenticatedFetch(`/api/projects/${projectName}/file/rename`, {
+      method: 'PUT',
+      body: JSON.stringify({ oldPath, newPath }),
+    }),
   getFiles: (projectName) =>
     authenticatedFetch(`/api/projects/${projectName}/files`),
   transcribe: (formData) =>
     authenticatedFetch('/api/transcribe', {
       method: 'POST',
       body: formData,
-      headers: {}, // Let browser set Content-Type for FormData
+      headers: { 'Content-Type': undefined }, // Remove Content-Type so browser sets it for FormData
     }),
 };

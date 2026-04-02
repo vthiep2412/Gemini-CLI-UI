@@ -4,12 +4,53 @@
 
 /* Global spinner animation - defined early to ensure it loads */
 @keyframes spin {
-  0% {
-    transform: rotate(0deg);
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Xterm Premium Styling */
+.xterm {
+  padding: 12px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+.xterm .xterm-screen,
+.xterm:focus .xterm-screen {
+  outline: none !important;
+}
+
+/* UI Animations */
+@keyframes slide-in-from-top-2 {
+  from {
+    transform: translateY(-0.5rem);
+    opacity: 0;
   }
-  100% {
-    transform: rotate(360deg);
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
+}
+
+/* 
+ * These utilities only set the animation-name and must be composed with 
+ * the .animate-in utility to provide common duration and timing. 
+ */
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slide-in-from-top-2;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @-webkit-keyframes spin {

@@ -72,11 +72,41 @@ function AppContent() {
     return saved ? parseInt(saved, 10) : 312; 
   });
   const [isResizing, setIsResizing] = useState(false);
+  // Refs for throttled resize handler (Task 8)
+  const latestClientXRef = useRef(null);
+  const rafIdRef = useRef(null);
+  
   // Session Protection System: Track sessions with active conversations to prevent
   // automatic project updates from interrupting ongoing chats. When a user sends
   // a message, the session is marked as "active" and project updates are paused
   // until the conversation completes or is aborted.
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
+  
+  const titleRef = useRef(null);
+  const navContainerRef = useRef(null);
+  const [isNavCollapsed, setIsNavCollapsed] = useState(false);
+
+  // Define shared layout helper for navigation collapsing
+  const checkNavCollapse = React.useCallback(() => {
+    if (!titleRef.current || !navContainerRef.current || isMobile) {
+      if (isMobile) setIsNavCollapsed(false);
+      return;
+    }
+    
+    const titleRect = titleRef.current.getBoundingClientRect();
+    const navRect = navContainerRef.current.getBoundingClientRect();
+    
+    // Calculate the actual gap between title and nav
+    const gap = navRect.left - titleRect.right;
+    
+    // Thresholds: collapse if close, expand if plenty of room
+    if (gap < 24) {
+      setIsNavCollapsed(true);
+    } else if (gap > 220) { 
+      // Larger buffer to expand back to prevent flickering
+      setIsNavCollapsed(false);
+    }
+  }, [isMobile]);
   
   const { ws, sendMessage, messages, lastSystemMessage } = useMessages();
 
@@ -108,35 +138,94 @@ function AppContent() {
 
   const stopResizing = React.useCallback(() => {
     setIsResizing(false);
+    // Task 8: Cancel any pending animation frame when stopping
+    if (rafIdRef.current) {
+      window.cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
   }, []);
 
   const resize = React.useCallback((e) => {
     if (isResizing) {
-      // 75% of 312 = 234, 105% of 312 = 327.6 (using 328)
-      const newWidth = e.clientX;
-      if (newWidth >= 234 && newWidth <= 328) {
-        setSidebarWidth(newWidth);
+      // Task 8: Store latest x position the browser reported
+      latestClientXRef.current = e.clientX;
+      
+      // If we don't have a frame scheduled, schedule one
+      if (!rafIdRef.current) {
+        rafIdRef.current = window.requestAnimationFrame(() => {
+          // Task 8: Read latest value and update state once per frame
+          const newWidth = latestClientXRef.current;
+          // Increased max width to ~361 (1.1x of previous 328)
+          if (newWidth >= 200 && newWidth <= 361) {
+            setSidebarWidth(newWidth);
+          }
+          // Task 8: Reset ID so next frame can be scheduled
+          rafIdRef.current = null;
+        });
       }
     }
   }, [isResizing]);
 
   useEffect(() => {
+    const handleMouseMove = (e) => resize(e);
+    const handleMouseUp = () => stopResizing();
+
     if (isResizing) {
-      window.addEventListener('mousemove', resize);
-      window.addEventListener('mouseup', stopResizing);
-    } else {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
     }
+    
     return () => {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      // Task 8: Final cleanup for pending frames
+      if (rafIdRef.current) {
+        window.cancelAnimationFrame(rafIdRef.current);
+      }
     };
   }, [isResizing, resize, stopResizing]);
 
   useEffect(() => {
     localStorage.setItem('sidebarWidth', sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  // Handle automatic navigation collapsing based on available space
+  useEffect(() => {
+    // Run check immediately and on layout changes
+    checkNavCollapse();
+    
+    // We add more dependencies for the effect instead of an observer 
+    // to handle content-driven width changes (like long titles)
+    const timer = setTimeout(checkNavCollapse, 100);
+    return () => clearTimeout(timer);
+  }, [selectedSession?.summary, activeTab, selectedProject?.displayName, sidebarWidth, checkNavCollapse]);
+  const resizeTimerRef = useRef(null);
+
+  // Also hook into window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!isMobile) {
+        // Clear any existing debounce timer
+        if (resizeTimerRef.current) {
+          clearTimeout(resizeTimerRef.current);
+        }
+
+        // Debounce slightly for performance
+        resizeTimerRef.current = setTimeout(() => {
+          checkNavCollapse();
+          resizeTimerRef.current = null;
+        }, 50);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
+    };
+  }, [isMobile, checkNavCollapse]);
 
   useEffect(() => {
     // Fetch projects on component mount
@@ -562,7 +651,7 @@ function AppContent() {
       {/* Fixed Desktop Sidebar */}
       {!isMobile && (
         <div 
-          className="flex-shrink-0 border-r border-border bg-card relative"
+          className="flex-shrink-0 bg-card relative"
           style={{ width: `${sidebarWidth}px` }}
         >
           <div className="h-full overflow-hidden">
@@ -642,12 +731,12 @@ function AppContent() {
       </AnimatePresence>
 
       {/* Main Content Area - Flexible */}
-      <div className="flex-1 flex flex-col min-w-0 relative">
+      <div className="flex-1 flex flex-col min-w-0 relative border-l border-border">
         {/* Persistent Top Bar (Header) */}
         <header className="h-16 bg-white/95 dark:bg-[#030711]/95 backdrop-blur-xl border-b border-border flex-shrink-0 z-30 relative shadow-sm">
           <div className="h-full px-4 flex items-center justify-between w-full relative">
             {/* Left side: Project Info */}
-            <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 z-10">
+            <div ref={titleRef} className="flex items-center space-x-2 sm:space-x-3 min-w-0 z-10">
               {isMobile && (
                 <button
                   onClick={() => setSidebarOpen(true)}
@@ -688,12 +777,16 @@ function AppContent() {
 
             {/* Middle: Floating Nav (Absolute Centered) */}
             {!isMobile && (
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center pointer-events-none z-20">
+              <div 
+                ref={navContainerRef}
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex justify-center pointer-events-none z-20"
+              >
                 <div className="pointer-events-auto">
                   <FloatingNav
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
                     selectedProject={selectedProject}
+                    forceCollapsed={isNavCollapsed}
                   />
                 </div>
               </div>

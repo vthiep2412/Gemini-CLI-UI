@@ -36,7 +36,9 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import cors from 'cors';
 import { promises as fsPromises } from 'fs';
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
 import os from 'os';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
@@ -61,6 +63,115 @@ const getHomeDir = () => {
     if (typeof d === 'string' && d) return d;
   }
   return process.env.HOME || process.env.USERPROFILE || '';
+};
+
+// Shell Detection & Management
+const detectShells = async () => {
+  const shells = [];
+  const isWindows = os.platform() === 'win32';
+  
+  if (isWindows) {
+    const commonPaths = [
+      { name: 'PowerShell 7', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', id: 'ps7' },
+      { name: 'PowerShell 5', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', id: 'ps5' },
+      { name: 'WSL', path: 'C:\\Windows\\System32\\wsl.exe', id: 'wsl' },
+      { name: 'Git Bash', path: 'C:\\Program Files\\Git\\bin\\bash.exe', id: 'gitbash' },
+      { name: 'Command Prompt', path: 'C:\\Windows\\System32\\cmd.exe', id: 'cmd' }
+    ];
+
+    for (const shell of commonPaths) {
+      try {
+        // Try specific path first
+        if (fs.existsSync(shell.path)) {
+          shells.push(shell);
+          continue;
+        }
+        
+        // Check if in PATH
+        const shellExeName = {
+          ps7: 'pwsh',
+          ps5: 'powershell',
+          gitbash: 'bash',
+          wsl: 'wsl',
+          cmd: 'cmd'
+        }[shell.id] || shell.id;
+        
+        try {
+          const cmd = `where.exe ${shellExeName}`;
+          // Use async exec to prevent blocking the event loop (Task 10)
+          const { stdout } = await execAsync(cmd);
+          const foundPaths = stdout.split('\r\n').map(p => p.trim()).filter(Boolean);
+          if (foundPaths.length > 0) {
+            shells.push({ ...shell, path: foundPaths[0] });
+          }
+        } catch (e) {
+          // If where.exe fails, we just continue (it means shell isn't in PATH)
+        }
+      } catch (e) {
+        // console.warn(`Could not find shell ${shell.name}:`, e.message);
+      }
+    }
+  } else {
+    // Unix fallback
+    const unixShells = [
+      { name: 'Bash', path: '/bin/bash', id: 'bash' },
+      { name: 'Zsh', path: '/bin/zsh', id: 'zsh' },
+      { name: 'Sh', path: '/bin/sh', id: 'sh' }
+    ];
+    for (const shell of unixShells) {
+      try {
+        if (fs.existsSync(shell.path)) {
+          shells.push(shell);
+        }
+      } catch (e) {}
+    }
+  }
+  
+  // Sort by priority: ps7 > ps5 > wsl > gitbash > cmd
+  const priority = ['ps7', 'ps5', 'wsl', 'gitbash', 'cmd', 'bash', 'zsh', 'sh'];
+  const result = shells.sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id));
+  
+  console.log('🐚 Detected shells:', result.map(s => s.name).join(', ') || 'None');
+  return result;
+};
+
+// Check if a process (by PID) is idle (no child processes)
+const isProcessIdle = async (pid) => {
+  if (!pid) return true;
+  try {
+    const isWindows = os.platform() === 'win32';
+    if (isWindows) {
+      // 1. Check for standard Windows child processes first
+      const psCommand = `powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"ParentProcessId = ${pid}\\" | Select-Object -ExpandProperty ProcessId"`;
+      try {
+        const { stdout } = await execAsync(psCommand, { timeout: 2000 });
+        const lines = stdout.trim().split(/\s+/).filter(line => line.trim() && !isNaN(parseInt(line)));
+        if (lines.length > 0) return false;
+      } catch (err) {}
+
+      // 2. Specialized check for WSL if no Windows children found
+      try {
+        // Get process name to verify if it's WSL (lighter check)
+        const { stdout: nameOutput } = await execAsync(`powershell.exe -NoProfile -Command "(Get-Process -Id ${pid}).ProcessName"`, { timeout: 1500 });
+        
+        if (nameOutput.trim().toLowerCase() === 'wsl') {
+          // Inside WSL, check if any non-standard processes are running
+          const wslCheckCmd = 'wsl.exe -e sh -c "ps -A -o comm= | grep -vE \'(^sh$|^bash$|^zsh$|^ps$|^init$|^wslhost$|^plan9$|^rc$|^sleep$)\' | wc -l"';
+          const { stdout: wslOutput } = await execAsync(wslCheckCmd, { timeout: 2000 });
+          const activeCount = parseInt(wslOutput.trim());
+          return isNaN(activeCount) || activeCount === 0;
+        }
+      } catch (wslErr) {}
+      
+      return true;
+    } else {
+      // Unix/Linux/macOS implementation
+      const { stdout } = await execAsync(`pgrep -P ${pid}`, { timeout: 1500 });
+      return stdout.trim() === '';
+    }
+  } catch (e) {
+    return true; // Assume idle if error or timeout
+  }
 };
 
 // Compute Gemini projects path safely (watch path)
@@ -321,6 +432,33 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/shells', authenticateToken, async (req, res) => {
+  try {
+    const shells = await detectShells();
+    res.json(shells);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Check if shell is idle (Task 9)
+app.get('/api/shell/:pid/idle', authenticateToken, async (req, res) => {
+  const pid = parseInt(req.params.pid);
+  
+  if (isNaN(pid) || pid <= 0) {
+    return res.status(400).json({ error: 'Invalid PID requested', isIdle: true });
+  }
+
+  try {
+    const isIdle = await isProcessIdle(pid);
+    res.json({ isIdle });
+  } catch (error) {
+    console.error(`[Error] Failed to check idle status for PID ${pid}:`, error);
+    // On error, we default to idle: true to avoid blocking user flow, but log the failure
+    res.status(500).json({ isIdle: true, error: 'Internal status check failure' });
+  }
+});
+
 app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, res) => {
   try {
     // Extract the actual project directory path
@@ -565,6 +703,68 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
   }
 });
 
+// Rename file/directory endpoint
+app.put('/api/projects/:projectName/file/rename', authenticateToken, async (req, res) => {
+  try {
+    const { projectName } = req.params;
+    const { oldPath, newPath } = req.body;
+    
+    if (!oldPath || !newPath) {
+      return res.status(400).json({ error: 'Both oldPath and newPath are required' });
+    }
+
+    if (!path.isAbsolute(oldPath) || !path.isAbsolute(newPath)) {
+      return res.status(400).json({ error: 'Paths must be absolute' });
+    }
+
+    const isOldPathSafe = await isPathInsideProject(projectName, oldPath);
+    const newPathParent = path.dirname(newPath);
+    const isNewPathSafe = await isPathInsideProject(projectName, newPathParent);
+
+    if (!isOldPathSafe || !isNewPathSafe) {
+      return res.status(403).json({ error: 'Path traversal detected or invalid destination' });
+    }
+
+    await fsPromises.rename(oldPath, newPath);
+    res.json({ success: true, oldPath, newPath });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete file/directory endpoint
+app.delete('/api/projects/:projectName/file', authenticateToken, async (req, res) => {
+  try {
+    const { projectName } = req.params;
+    const { filePath } = req.query;
+
+    if (!filePath || !path.isAbsolute(filePath)) {
+      return res.status(400).json({ error: 'Invalid file path' });
+    }
+
+    if (!(await isPathInsideProject(projectName, filePath))) {
+      return res.status(403).json({ error: 'Path traversal detected' });
+    }
+
+    const stats = await fsPromises.stat(filePath);
+    if (stats.isDirectory()) {
+      await fsPromises.rm(filePath, { recursive: true, force: true });
+    } else {
+      await fsPromises.unlink(filePath);
+    }
+
+    res.json({ success: true, message: 'Deleted successfully' });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      res.status(404).json({ error: 'File or directory not found' });
+    } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+      res.status(403).json({ error: 'Permission denied' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
 app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) => {
   try {
     
@@ -661,79 +861,127 @@ function handleShellConnection(ws) {
   // console.log('🐚 Shell client connected');
   let shellProcess = null;
   
+  // Send immediate validation that server received the connection
+  if (ws.readyState === ws.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'output',
+      data: '\r\n\x1b[1;32m[SERVER] WebSocket established, waiting for init...\x1b[0m\r\n'
+    }));
+  }
+  
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
-      // console.log('📨 Shell message received:', data.type);
       
       if (data.type === 'init') {
         // Initialize shell with project path and session info
         const projectPath = data.projectPath || process.cwd();
         const sessionId = data.sessionId;
         const hasSession = data.hasSession;
+        const shellType = data.shellType || 'standard';
+        const clientShellPath = data.shellPath; // Specific shell path from UI
         
+        // Use appropriate shell for the platform
+        const isWindows = os.platform() === 'win32';
         
-        // First send a welcome message
-        const welcomeMsg = hasSession ? 
-          `\x1b[36mResuming Gemini session ${sessionId} in: ${projectPath}\x1b[0m\r\n` :
-          `\x1b[36mStarting new Gemini session in: ${projectPath}\x1b[0m\r\n`;
+        // Validate client-provided shell path against detected system shells for security
+        let finalShell = isWindows ? 'powershell.exe' : 'bash';
+        if (clientShellPath) {
+          try {
+            const detectedShells = await detectShells();
+            const matchingShell = detectedShells.find(s => {
+              if (isWindows) {
+                // On Windows, handle case-insensitivity and potential normalization differences
+                return s.path.toLowerCase() === clientShellPath.toLowerCase() || 
+                       path.resolve(s.path).toLowerCase() === path.resolve(clientShellPath).toLowerCase();
+              }
+              return s.path === clientShellPath;
+            });
+            
+            if (matchingShell) {
+              finalShell = matchingShell.path;
+            } else {
+              // If not found in detected shells, reject it and use safe default
+              console.warn(`[Security] Unrecognized shell path requested: ${clientShellPath}. Reverting to default: ${finalShell}`);
+            }
+          } catch (err) {
+            console.error('Error validating shell path:', err);
+          }
+        }
         
+        const shell = finalShell;
+        
+        // First send a welcome message 
         ws.send(JSON.stringify({
           type: 'output',
-          data: welcomeMsg
+          data: `\r\n\x1b[1;36m[SERVER] Spawning ${shell}...\x1b[0m\r\n\x1b[2mDirectory: ${projectPath}\x1b[0m\r\n\r\n`,
+          pid: 0
         }));
         
+        // Resolve project path to ensure compatibility across OS
+        let normalizedProjectPath = path.resolve(projectPath);
         try {
-          // Get gemini command from environment or use default
-          const geminiPath = process.env.GEMINI_PATH || 'gemini';
-          
-          // First check if gemini CLI is available
-          try {
-            const checkCmd = os.platform() === 'win32' ? `where.exe ${geminiPath}` : `which ${geminiPath}`;
-            execSync(checkCmd, { stdio: 'ignore' });
-          } catch (error) {
-            // console.error('❌ Gemini CLI not found in PATH or GEMINI_PATH');
-            ws.send(JSON.stringify({
-              type: 'output',
-              data: `\r\n\x1b[31mError: Gemini CLI not found. Please check:\x1b[0m\r\n\x1b[33m1. Install gemini globally: npm install -g @google/generative-ai-cli\x1b[0m\r\n\x1b[33m2. Or set GEMINI_PATH in .env file\x1b[0m\r\n`
-            }));
-            return;
+          // path.resolve already returns a normalized absolute path
+          // Verify directory exists
+          await fsPromises.access(normalizedProjectPath);
+        } catch (err) {
+          normalizedProjectPath = process.cwd();
+          ws.send(JSON.stringify({
+           type: 'output',
+           data: `\x1b[33m[WARNING] Requested path not accessible, using ${normalizedProjectPath}\x1b[0m\r\n`
+         }));
+        }
+        
+        try {
+          // Kill any existing shell process for this connection before starting a new one
+          if (shellProcess) {
+            try {
+              if (isWindows) {
+                execSync(`taskkill /f /t /pid ${shellProcess.pid}`, { stdio: 'ignore' });
+              } else {
+                shellProcess.kill();
+              }
+            } catch (e) {}
           }
           
-          // Build shell command that changes to project directory first, then runs gemini
-          let geminiCommand = geminiPath;
-          
-          if (hasSession && sessionId) {
-            // Try to resume session, but with fallback to new session if it fails
-            geminiCommand = `${geminiPath} --resume ${sessionId} || ${geminiPath}`;
+          let shellArgs = [];
+          if (shellType === 'gemini' || (hasSession && !shellType)) {
+            // Get gemini command from environment or use default
+            const geminiPath = process.env.GEMINI_PATH || 'gemini';
+            
+            // Validate sessionId to prevent command injection (alphanumeric, hyphens, underscores only)
+            const safeSessionId = sessionId && /^[a-zA-Z0-9_-]+$/.test(sessionId) 
+              ? sessionId 
+              : null;
+            
+            // Build the command
+            let geminiCommand = geminiPath;
+            if (hasSession && safeSessionId) {
+              geminiCommand = `${geminiPath} --resume ${safeSessionId} || ${geminiPath}`;
+            }
+            
+            shellArgs = isWindows ? ['-Command', geminiCommand] : ['-c', geminiCommand];
           }
-          
-          // Use appropriate shell for the platform
-          const isWindows = os.platform() === 'win32';
-          const shell = isWindows ? 'powershell.exe' : 'bash';
-          const shellArgs = isWindows ? ['-Command', shellCommand] : ['-c', shellCommand];
 
           // Start shell using PTY for proper terminal emulation
           shellProcess = pty.spawn(shell, shellArgs, {
             name: 'xterm-256color',
-            cols: 80,
-            rows: 24,
-            cwd: projectPath, // Use project path
+            cols: data.cols || 80,
+            rows: data.rows || 24,
+            cwd: normalizedProjectPath,
             env: { 
               ...process.env,
               TERM: 'xterm-256color',
-              // On Windows, it's safer to not force xterm env vars if using powershell
-              ...(isWindows ? {} : { 
-                COLORTERM: 'truecolor',
-                FORCE_COLOR: '3'
-              }),
-              // Override browser opening commands to echo URL for detection
               BROWSER: 'echo "OPEN_URL:"'
             }
           });
           
-          // console.log('🟢 Shell process started with PTY, PID:', shellProcess.pid);
-          
+          // Send PID back to client
+          ws.send(JSON.stringify({
+            type: 'pid',
+            pid: shellProcess.pid
+          }));
+
           // Handle data output
           shellProcess.onData((data) => {
             if (ws.readyState === ws.OPEN) {
@@ -741,13 +989,9 @@ function handleShellConnection(ws) {
               
               // Check for various URL opening patterns
               const patterns = [
-                // Direct browser opening commands
                 /(?:xdg-open|open|start)\s+(https?:\/\/[^\s\x1b\x07]+)/g,
-                // BROWSER environment variable override
                 /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
-                // Git and other tools opening URLs
                 /Opening\s+(https?:\/\/[^\s\x1b\x07]+)/gi,
-                // General URL patterns that might be opened
                 /Visit:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
                 /View at:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
                 /Browse to:\s*(https?:\/\/[^\s\x1b\x07]+)/gi
@@ -757,22 +1001,17 @@ function handleShellConnection(ws) {
                 let match;
                 while ((match = pattern.exec(data)) !== null) {
                   const url = match[1];
-                  // console.log('🔗 Detected URL for opening:', url);
-                  
-                  // Send URL opening message to client
                   ws.send(JSON.stringify({
                     type: 'url_open',
                     url: url
                   }));
                   
-                  // Replace the OPEN_URL pattern with a user-friendly message
                   if (pattern.source.includes('OPEN_URL')) {
                     outputData = outputData.replace(match[0], `🌐 Opening in browser: ${url}`);
                   }
                 }
               });
               
-              // Send regular output
               ws.send(JSON.stringify({
                 type: 'output',
                 data: outputData
@@ -782,7 +1021,6 @@ function handleShellConnection(ws) {
           
           // Handle process exit
           shellProcess.onExit((exitCode) => {
-            // console.log('🔚 Shell process exited with code:', exitCode.exitCode, 'signal:', exitCode.signal);
             if (ws.readyState === ws.OPEN) {
               ws.send(JSON.stringify({
                 type: 'output',
@@ -793,7 +1031,6 @@ function handleShellConnection(ws) {
           });
           
         } catch (spawnError) {
-          // console.error('❌ Error spawning process:', spawnError);
           ws.send(JSON.stringify({
             type: 'output',
             data: `\r\n\x1b[31mError: ${spawnError.message}\x1b[0m\r\n`
@@ -801,25 +1038,17 @@ function handleShellConnection(ws) {
         }
         
       } else if (data.type === 'input') {
-        // Send input to shell process
         if (shellProcess && shellProcess.write) {
           try {
             shellProcess.write(data.data);
-          } catch (error) {
-            // console.error('Error writing to shell:', error);
-          }
-        } else {
-          // console.warn('No active shell process to send input to');
+          } catch (error) {}
         }
       } else if (data.type === 'resize') {
-        // Handle terminal resize
         if (shellProcess && shellProcess.resize) {
-          // console.log('Terminal resize requested:', data.cols, 'x', data.rows);
           shellProcess.resize(data.cols, data.rows);
         }
       }
     } catch (error) {
-      // console.error('❌ Shell WebSocket error:', error.message);
       if (ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({
           type: 'output',
@@ -832,8 +1061,15 @@ function handleShellConnection(ws) {
   ws.on('close', () => {
     // console.log('🔌 Shell client disconnected');
     if (shellProcess && shellProcess.kill) {
-      // console.log('🔴 Killing shell process:', shellProcess.pid);
-      shellProcess.kill();
+      try {
+        if (os.platform() === 'win32') {
+          // Use taskkill for reliable cleanup on Windows to catch sub-processes
+          execSync(`taskkill /f /t /pid ${shellProcess.pid}`, { stdio: 'ignore' });
+        } else {
+          shellProcess.kill();
+        }
+      } catch (e) {}
+      shellProcess = null;
     }
   });
   
