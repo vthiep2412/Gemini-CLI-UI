@@ -7,7 +7,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import '@xterm/xterm/css/xterm.css';
-import { Terminal as TerminalIcon, ChevronRight, Box, AlertCircle, Trash2, RotateCcw, ChevronDown, Monitor } from 'lucide-react';
+import { Terminal as TerminalIcon, ChevronRight, Box, ChevronDown, Monitor } from 'lucide-react';
 
 // CSS to remove xterm focus outline
 const xtermStyles = `
@@ -168,6 +168,9 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
         }
       } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Config fetch failed, using fallback WebSocket URL:', error);
+        }
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         // For development, API server is typically on port 4008 when Vite is on 4009
         const apiPort = window.location.port === '4009' ? '4008' : window.location.port;
@@ -227,6 +230,9 @@ function Shell({ selectedProject, selectedSession, isActive }) {
             window.open(data.url, '_blank');
           }
         } catch (error) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Failed to parse WebSocket message as JSON:', error);
+          }
           terminal.current?.write(event.data);
         }
       };
@@ -292,7 +298,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   }, [showShellMenu]);
 
   // Connect to shell function
-  const connectToShell = useCallback((projectPath) => {
+  const connectToShell = useCallback(() => {
     console.log('Connect to shell clicked');
     
     // Check auth token first
@@ -408,15 +414,14 @@ function Shell({ selectedProject, selectedSession, isActive }) {
     
     // Set flag to auto-connect after re-initialization
     setShouldAutoConnect(true);
-    
-    // Small delay to allow cleanup then trigger re-init
+
     // Small delay to allow cleanup then trigger re-init
     clearShellTimeout('restart-delay');
     timeoutsRef.current['restart-delay'] = setTimeout(() => {
       setIsRestarting(false);
       delete timeoutsRef.current['restart-delay'];
     }, 300);
-  }, [isRestarting, isConnected, currentPid, disconnectFromShell, selectedSession, selectedProject]);
+  }, [isRestarting, isConnected, currentPid, disconnectFromShell, selectedProject]);
 
 
   // Auto-connect after restart re-initialization
@@ -539,7 +544,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
       
       try {
         terminal.current.loadAddon(webglAddon);
-      } catch (error) {}
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('WebGL addon failed to load, falling back to canvas:', error);
+        }
+      }
     }
     
     if (terminalRef.current && !terminal.current.element) {
@@ -580,6 +589,9 @@ function Shell({ selectedProject, selectedSession, isActive }) {
           }
         }).catch(err => {
           // Failed to read clipboard
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Clipboard read failed:', err);
+          }
         });
         return false;
       }
@@ -776,7 +788,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
   return (
     <div className="h-full flex flex-col bg-background w-full">
       {/* Header */}
-      <div className="flex-shrink-0 bg-muted/30 border-b border-border px-4 py-[0.7rem]">
+      <div className="shrink-0 bg-muted/30 border-b border-border px-4 py-[0.7rem]">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
@@ -799,7 +811,7 @@ function Shell({ selectedProject, selectedSession, isActive }) {
                   className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50 hover:bg-muted border border-border transition-colors group"
                 >
                   {getShellIcon(currentShellData?.id)}
-                  <span className="text-sm font-medium text-foreground truncate max-w-[120px]">
+                  <span className="text-sm font-medium text-foreground truncate max-w-30">
                     {currentShellData?.name || 'Standard Shell'}
                   </span>
                   <motion.div

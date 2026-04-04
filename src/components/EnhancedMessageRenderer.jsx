@@ -39,7 +39,7 @@ const CodeBlock = ({ language, value, isDarkMode }) => {
     } else if (lowerValue.includes('select ') || lowerValue.includes('from ') || lowerValue.includes('insert ') || lowerValue.includes('update ')) {
       detectedLanguage = 'sql';
     } else if (value.trim().startsWith('{') && value.trim().endsWith('}')) {
-      try { JSON.parse(value); detectedLanguage = 'json'; } catch {}
+      try { JSON.parse(value); detectedLanguage = 'json'; } catch { /* Expected for non-JSON content */ }
     } else if (value.includes('#!/bin/bash') || value.includes('#!/bin/sh')) {
       detectedLanguage = 'bash';
     }
@@ -47,7 +47,7 @@ const CodeBlock = ({ language, value, isDarkMode }) => {
 
   return (
     <div className="relative group my-3 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-2 bg-linear-to-r from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700">
         <span className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wider">{detectedLanguage || 'plaintext'}</span>
         <button
           onClick={handleCopy}
@@ -109,7 +109,7 @@ export const EnhancedMessageRenderer = ({ content, isDarkMode = true }) => {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code: ({ node, inline, className, children, ...props }) => {
+          code: ({ inline, className, children }) => {
             if (inline) {
               return (
                 <code className="px-1.5 py-0.5 mx-0.5 bg-blue-50 dark:bg-gray-800 text-blue-600 dark:text-blue-400 rounded text-xs font-mono">

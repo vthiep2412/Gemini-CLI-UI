@@ -14,7 +14,7 @@ class SessionManager {
     try {
       await fs.mkdir(this.sessionsDir, { recursive: true });
     } catch (error) {
-      // console.error('Error creating sessions directory:', error);
+      console.error('Error creating sessions directory:', error);
     }
   }
 
@@ -66,7 +66,7 @@ class SessionManager {
   getProjectSessions(projectPath) {
     const sessions = [];
     
-    for (const [id, session] of this.sessions) {
+    for (const [session] of this.sessions) {
       if (session.projectPath === projectPath) {
         sessions.push({
           id: session.id,
@@ -84,6 +84,10 @@ class SessionManager {
 
   // Get session summary
   getSessionSummary(session) {
+    if (session.customSummary) {
+      return session.customSummary;
+    }
+    
     if (session.messages.length === 0) {
       return 'New Session';
     }
@@ -133,7 +137,7 @@ class SessionManager {
       const filePath = path.join(this.sessionsDir, `${sessionId}.json`);
       await fs.writeFile(filePath, JSON.stringify(session, null, 2));
     } catch (error) {
-      // console.error('Error saving session:', error);
+      console.error('Error saving session:', error);
     }
   }
 
@@ -158,12 +162,12 @@ class SessionManager {
             
             this.sessions.set(session.id, session);
           } catch (error) {
-            // console.error(`Error loading session ${file}:`, error);
+            console.error(`Error loading session ${file}:`, error);
           }
         }
       }
     } catch (error) {
-      // console.error('Error loading sessions:', error);
+      console.error('Error loading sessions:', error);
     }
   }
 
@@ -175,8 +179,20 @@ class SessionManager {
       const filePath = path.join(this.sessionsDir, `${sessionId}.json`);
       await fs.unlink(filePath);
     } catch (error) {
-      // console.error('Error deleting session file:', error);
+      console.error('Error deleting session file:', error);
     }
+  }
+
+  // Update session summary
+  updateSessionSummary(sessionId, summary) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    
+    session.customSummary = summary;
+    session.lastActivity = new Date();
+    
+    this.saveSession(sessionId);
+    return true;
   }
 
   // Get session messages for display

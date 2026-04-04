@@ -11,7 +11,7 @@
  * No session protection logic is implemented here - it's purely a props bridge.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ChatInterface from './ChatInterface';
 import IDETab from './IDETab';
 
@@ -25,8 +25,8 @@ function MainContent({
   activeTab, 
   setActiveTab, 
   isMobile,
-  onMenuClick,
   isLoading,
+  isInputFocused,
   onInputFocusChange,
   // Session Protection Props: Functions passed down from App.jsx to manage active session state
   // These functions control when project updates are paused during active conversations
@@ -116,6 +116,7 @@ function MainContent({
             selectedProject={selectedProject}
             selectedSession={selectedSession}
             onFileOpen={handleFileOpen}
+            isInputFocused={isInputFocused}
             onInputFocusChange={onInputFocusChange}
             onSessionActive={onSessionActive}
             onSessionInactive={onSessionInactive}

@@ -109,7 +109,7 @@ const Tooltip = forwardRef((props, ref) => {
               exit={{ opacity: 0, scale: 0.95, y: coords.bottom !== 'auto' ? 4 : -4 }}
               transition={{ duration: 0.08, ease: 'easeOut' }}
               className={`pointer-events-none fixed px-2.5 py-1.5 rounded-md text-[10px] font-bold tracking-tight whitespace-nowrap
-                bg-[var(--bg-surface)] text-[var(--text-primary)] border border-border/60 z-[9999] ${contentClassName}`}
+                bg-(--bg-surface) text-(--text-primary) border border-border/60 z-9999 ${contentClassName}`}
               style={{ 
                 top: coords.top,
                 bottom: coords.bottom,

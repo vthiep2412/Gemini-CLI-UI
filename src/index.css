@@ -1,6 +1,50 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* System Colors */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  /* Gemini Palette */
+  --color-gemini-50: #f0fdfa;
+  --color-gemini-100: #ccfbf1;
+  --color-gemini-200: #99f6e4;
+  --color-gemini-300: #5eead4;
+  --color-gemini-400: #2dd4bf;
+  --color-gemini-500: #14b8a6;
+  --color-gemini-600: #0d9488;
+  --color-gemini-700: #0f766e;
+  --color-gemini-800: #115e59;
+  --color-gemini-900: #134e4a;
+  --color-gemini-950: #042f2e;
+
+  /* Border Radius */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  /* Spacing */
+  --spacing-safe-area-inset-bottom: env(safe-area-inset-bottom);
+}
+
 
 /* Global spinner animation - defined early to ensure it loads */
 @keyframes spin {
@@ -40,17 +84,17 @@
  * These utilities only set the animation-name and must be composed with 
  * the .animate-in utility to provide common duration and timing. 
  */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .fade-in {
   animation-name: fade-in;
 }
 
 .slide-in-from-top-2 {
   animation-name: slide-in-from-top-2;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 @-webkit-keyframes spin {

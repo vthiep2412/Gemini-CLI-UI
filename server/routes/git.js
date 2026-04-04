@@ -13,7 +13,7 @@ async function getActualProjectPath(projectName) {
   try {
     return await extractProjectDirectory(projectName);
   } catch (error) {
-    // console.error(`Error extracting project directory for ${projectName}:`, error);
+    console.error(`Error extracting project directory for ${projectName}:`, error);
     // Fallback to the old method
     return projectName.replace(/-/g, '/');
   }
@@ -42,7 +42,7 @@ async function validateGitRepository(projectPath) {
     if (error.message.includes('Project directory is not a git repository')) {
       throw error;
     }
-    throw new Error('Not a git repository. This directory does not contain a .git folder. Initialize a git repository with "git init" to use source control features.');
+    throw new Error('Not a git repository. This directory does not contain a .git folder. Initialize a git repository with "git init" to use source control features.', { cause: error });
   }
 }
 
@@ -63,7 +63,6 @@ router.get('/status', async (req, res) => {
 
     // Get current branch
     const { stdout: branch } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: projectPath });
-    const currentBranch = branch.trim();
     
     // Get porcelain status
     const { stdout: statusOutput } = await execFileAsync('git', ['status', '--porcelain', '-z', '-uall'], { cwd: projectPath });
@@ -153,7 +152,7 @@ router.get('/diff', async (req, res) => {
     } else {
       try {
         modifiedContent = await fs.readFile(path.join(projectPath, file), 'utf-8');
-      } catch (e) {
+      } catch {
         // File might be deleted
       }
 
@@ -161,7 +160,7 @@ router.get('/diff', async (req, res) => {
         // Try getting from HEAD first
         const { stdout: originalOut } = await execFileAsync('git', ['show', `HEAD:${file}`], { cwd: projectPath });
         originalContent = originalOut;
-      } catch (e) {
+      } catch {
         // If file is new and staged, original might not exist in HEAD
       }
     }
@@ -307,14 +306,14 @@ router.get('/commits', async (req, res) => {
           { cwd: projectPath }
         );
         commit.stats = stats.trim().split('\n').pop(); // Get the summary line
-      } catch (error) {
+      } catch {
         commit.stats = '';
       }
     }
     
     res.json({ commits });
   } catch (error) {
-    // console.error('Git commits error:', error);
+    console.error('Git commits error:', error);
     res.json({ error: error.message });
   }
 });
@@ -350,7 +349,7 @@ router.post('/commit', async (req, res) => {
       await execFileAsync('git', ['diff', '--cached', '--quiet'], { cwd: projectPath });
       // If success (exit code 0), no changes are staged
       return res.status(400).json({ error: 'No staged changes to commit' });
-    } catch (e) {
+    } catch {
       // Exit code 1 means there are staged changes, which is what we want
     }
 
@@ -471,7 +470,7 @@ router.get('/commit-file-diff', async (req, res) => {
     }
 
     // Validate commit reference to prevent command injection or misinterpretation
-    if (!/^[a-zA-Z0-9_\-\.\^~\/@{}]+$/.test(commit)) {
+    if (!/^[a-zA-Z0-9_\-.^~/@{}]+$/.test(commit)) {
       return res.status(400).json({ error: 'Invalid commit reference' });
     }
 
@@ -483,7 +482,7 @@ router.get('/commit-file-diff', async (req, res) => {
       // Use the 'commit:file' syntax to get the raw content of the file at that specific commit
       const { stdout } = await execFileAsync('git', ['show', `${commit}:${file}`], { cwd: projectPath });
       modifiedContent = stdout;
-    } catch (e) {
+    } catch {
       // File might have been deleted in this commit or not exist in this version
     }
 
@@ -493,7 +492,7 @@ router.get('/commit-file-diff', async (req, res) => {
       // Use the 'commit^1:file' syntax to get raw content from the parent commit
       const { stdout } = await execFileAsync('git', ['show', `${commit}^1:${parentPath}`], { cwd: projectPath });
       originalContent = stdout;
-    } catch (e) {
+    } catch {
       // File might be new in this commit, or parent might not have it
     }
 
@@ -635,7 +634,7 @@ router.get('/remote-status', async (req, res) => {
       const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], { cwd: projectPath });
       trackingBranch = stdout.trim();
       remoteName = trackingBranch.split('/')[0]; // Extract remote name (e.g., "origin/main" -> "origin")
-    } catch (error) {
+    } catch {
       // No upstream branch configured
       return res.json({ 
         hasRemote: false, 
@@ -688,9 +687,9 @@ router.post('/fetch', async (req, res) => {
     try {
       const { stdout } = await execFileAsync('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], { cwd: projectPath });
       remoteName = stdout.trim().split('/')[0]; // Extract remote name
-    } catch (error) {
+    } catch {
       // No upstream, try to fetch from origin anyway
-      // console.log('No upstream configured, using origin as fallback');
+      console.log('No upstream configured, using origin as fallback');
     }
 
     const { stdout } = await execFileAsync('git', ['fetch', remoteName], { cwd: projectPath });
@@ -732,9 +731,9 @@ router.post('/pull', async (req, res) => {
       const tracking = stdout.trim();
       remoteName = tracking.split('/')[0]; // Extract remote name
       remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
-    } catch (error) {
+    } catch {
       // No upstream, use fallback
-      // console.log('No upstream configured, using origin/branch as fallback');
+      console.log('No upstream configured, using origin/branch as fallback');
     }
 
     const { stdout } = await execFileAsync('git', ['pull', remoteName, remoteBranch], { cwd: projectPath });
@@ -746,7 +745,7 @@ router.post('/pull', async (req, res) => {
       remoteBranch
     });
   } catch (error) {
-    // console.error('Git pull error:', error);
+    console.error('Git pull error:', error);
     
     // Enhanced error handling for common pull scenarios
     let errorMessage = 'Pull failed';
@@ -799,9 +798,9 @@ router.post('/push', async (req, res) => {
       const tracking = stdout.trim();
       remoteName = tracking.split('/')[0]; // Extract remote name
       remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
-    } catch (error) {
+    } catch {
       // No upstream, use fallback
-      // console.log('No upstream configured, using origin/branch as fallback');
+      console.log('No upstream configured, using origin/branch as fallback');
     }
 
     const { stdout } = await execFileAsync('git', ['push', remoteName, remoteBranch], { cwd: projectPath });
@@ -813,7 +812,7 @@ router.post('/push', async (req, res) => {
       remoteBranch
     });
   } catch (error) {
-    // console.error('Git push error:', error);
+    console.error('Git push error:', error);
     
     // Enhanced error handling for common push scenarios
     let errorMessage = 'Push failed';
@@ -953,7 +952,7 @@ router.get('/graph', async (req, res) => {
     try {
       const { stdout: countOut } = await execFileAsync('git', ['rev-list', '--count', '--all'], { cwd: projectPath });
       total = parseInt(countOut.trim(), 10) || 0;
-    } catch (_) { /* ignore */ }
+    } catch { /* ignore */ }
 
     res.json({ commits, total, limit: limitNum, skip: skipNum });
   } catch (error) {

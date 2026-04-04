@@ -169,15 +169,15 @@ export default function GraphRenderer() {
     const relative = isValid ? getRelative(d) : '';
 
     return (
-      <div className="flex flex-col gap-1.5 p-1 min-w-[340px]">
+      <div className="flex flex-col gap-1.5 p-1 min-w-85">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-wider opacity-50 font-bold w-16">Author</span>
-              <span className="text-sm font-semibold text-[var(--git-accent)]">{commit.author}</span>
+              <span className="text-sm font-semibold text-(--git-accent)">{commit.author}</span>
             </div>
             {relative && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--git-accent)]/10 text-[var(--git-accent)] font-bold">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-(--git-accent)/10 text-(--git-accent) font-bold">
                 {relative}
               </span>
             )}
@@ -209,7 +209,7 @@ export default function GraphRenderer() {
         </div>
 
         <div className="mt-1 pt-1.5 border-t border-border/30">
-          <code className="text-[13px] font-bold text-[var(--git-accent)] opacity-80 break-all block font-mono bg-black/20 px-2 py-1.5 rounded tracking-tight">
+          <code className="text-[13px] font-bold text-(--git-accent) opacity-80 break-all block font-mono bg-black/20 px-2 py-1.5 rounded tracking-tight">
             {commit.hash}
           </code>
         </div>
@@ -227,14 +227,14 @@ export default function GraphRenderer() {
   };
 
   if (!graphLayout.length && !loadingState.loadingGraph) {
-    return <div className="flex-1 flex items-center justify-center text-xs text-[var(--text-secondary)] bg-[var(--bg-base)]">No commits found</div>;
+    return <div className="flex-1 flex items-center justify-center text-xs text-(--text-secondary) bg-(--bg-base)">No commits found</div>;
   }
 
   return (
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-auto bg-[var(--bg-surface)] relative scrollbar-none transition-colors"
+      className="flex-1 overflow-auto bg-(--bg-surface) relative scrollbar-none transition-colors"
     >
       {/* ── 1. SVG Layer (Background Lines) ── */}
       <svg
@@ -286,7 +286,7 @@ export default function GraphRenderer() {
 
       {/* ── 2. DOM Layer (Rows and Nodes) ── */}
       <div className="flex flex-col min-w-max z-10 relative pb-20">
-        {graphLayout.map((commit, idx) => {
+        {graphLayout.map((commit) => {
           const isSelected = commit.hash === selectedCommit;
           const isHovered = commit.hash === hoveredHash;
           const color = commit.color || getColor(commit.lane || 0);
@@ -297,7 +297,7 @@ export default function GraphRenderer() {
               label={renderCommitTooltip(commit)}
               anchorRef={{ current: labelAreaRefs.current[commit.hash] }}
               align="left"
-              contentClassName="max-w-none !p-3 !bg-[var(--bg-base)] !border-border/40 shadow-2xl"
+              contentClassName="max-w-none !p-3 !bg-(--bg-base) !border-border/40 shadow-2xl"
             >
               <div
                 tabIndex={0}
@@ -320,10 +320,10 @@ export default function GraphRenderer() {
                 onMouseLeave={() => setHoveredHash(null)}
                 style={{ height: `${ROW_H}px` }}
                 className={`flex items-center group cursor-pointer transition-all duration-200 border-b border-border/10
-                  ${isSelected ? 'bg-[var(--git-accent)]/10' : isHovered ? 'bg-[var(--git-accent)]/5' : ''}`}
+                  ${isSelected ? 'bg-(--git-accent)/10' : isHovered ? 'bg-(--git-accent)/5' : ''}`}
               >
                 {/* Lane Area */}
-                <div style={{ width: `${lanesWidth}px` }} className="relative h-full flex-shrink-0 border-r border-border/30">
+                <div style={{ width: `${lanesWidth}px` }} className="relative h-full shrink-0 border-r border-border/30">
                   {/* DOM Node (Circle) */}
                   <div
                     style={{
@@ -341,7 +341,7 @@ export default function GraphRenderer() {
                     {/* Selection glow */}
                     {isSelected && (
                       <div
-                        className="absolute inset-[-4px] rounded-full animate-pulse opacity-20"
+                        className="absolute -inset-1 rounded-full animate-pulse opacity-20"
                         style={{ backgroundColor: color }}
                       />
                     )}
@@ -351,19 +351,19 @@ export default function GraphRenderer() {
                 {/* Label Area */}
                 <div className="flex items-center gap-4 px-2 min-w-0 pr-8">
                   {/* Hash */}
-                  <span className={`text-xs font-mono w-[72px] flex-shrink-0 transition-colors duration-200 ${isSelected ? 'text-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
+                  <span className={`text-xs font-mono w-18 shrink-0 transition-colors duration-200 ${isSelected ? 'text-(--accent)' : 'text-(--text-secondary)'}`}>
                     {commit.hash.slice(0, 7)}
                   </span>
 
                   {/* Message */}
                   <span 
                     ref={el => labelAreaRefs.current[commit.hash] = el}
-                    className={`text-sm truncate max-w-xl transition-all duration-200 ${isSelected ? 'text-[var(--text-primary)] font-bold' : isHovered ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                    className={`text-sm truncate max-w-xl transition-all duration-200 ${isSelected ? 'text-(--text-primary) font-bold' : isHovered ? 'text-(--text-primary)' : 'text-(--text-secondary)'}`}>
                     {commit.message}
                   </span>
 
                   {/* Ref Badges */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {commit.refs?.map((ref, ri) => {
                       const isHEAD = ref.type === 'HEAD' || ref.type === 'HEAD_DETACHED';
                       const isTag = ref.type === 'tag';
@@ -399,8 +399,8 @@ export default function GraphRenderer() {
 
         {/* Loading Spinner */}
         {loadingState.loadingGraph && (
-          <div className="p-4 flex items-center justify-center gap-3 text-[10px] text-[var(--text-secondary)] font-mono uppercase tracking-widest bg-[var(--bg-base)]">
-            <div className="w-3.5 h-3.5 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
+          <div className="p-4 flex items-center justify-center gap-3 text-[10px] text-(--text-secondary) font-mono uppercase tracking-widest bg-(--bg-base)">
+            <div className="w-3.5 h-3.5 border-2 border-(--accent) border-t-transparent rounded-full animate-spin" />
             Synchronizing...
           </div>
         )}

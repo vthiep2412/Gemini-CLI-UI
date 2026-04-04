@@ -6,8 +6,8 @@
  * showing that commit's file diffs (read-only).
  */
 import React, { useMemo, useState, useEffect } from 'react';
-import { GitBranch, ChevronDown, ChevronRight, File, Folder, Search, Filter } from 'lucide-react';
-import Tooltip from '../common/Tooltip';
+import { ChevronRight } from 'lucide-react';
+// import Tooltip from '../common/Tooltip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import FileRow from './FileRow';
@@ -20,16 +20,16 @@ function Section({ title, icon, iconClass, count, children, defaultOpen = true, 
       <div
         role="button"
         tabIndex={0}
-        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold tracking-widest uppercase text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]/50 hover:text-[var(--text-primary)] transition-all group cursor-pointer outline-none border-b border-border/10"
+        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-bold tracking-widest uppercase text-(--text-secondary) hover:bg-(--bg-muted)/50 hover:text-(--text-primary) transition-all group cursor-pointer outline-none border-b border-border/10"
         onClick={() => setOpen(v => !v)}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(v => !v); } }}
       >
         <div className={`transition-transform duration-300 transform-gpu ${open ? 'rotate-90' : ''}`}>
-          <ChevronRight className="w-3.5 h-3.5 text-[var(--text-secondary)] group-hover:text-[var(--git-accent)]" />
+          <ChevronRight className="w-3.5 h-3.5 text-(--text-secondary) group-hover:text-(--git-accent)" />
         </div>
         {icon && <span className={iconClass}>{icon}</span>}
         <span className="flex-1 text-left tracking-tight">{title}</span>
-        <span className="px-1.5 py-0.5 rounded-full bg-[var(--bg-muted)] text-[var(--text-primary)] font-mono text-[9px] group-hover:scale-105 transition-all">
+        <span className="px-1.5 py-0.5 rounded-full bg-(--bg-muted) text-(--text-primary) font-mono text-[9px] group-hover:scale-105 transition-all">
           {count}
         </span>
         {headerActions && <div className="ml-auto flex items-center gap-2" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{headerActions}</div>}
@@ -122,22 +122,22 @@ export default function FileTree() {
   if (selectedCommit) {
     return (
       <div 
-        className="flex-1 overflow-y-auto min-h-0 bg-[var(--bg-base)] scrollbar-none outline-none"
+        className="flex-1 overflow-y-auto min-h-0 bg-(--bg-base) scrollbar-none outline-none"
         onKeyDown={handleKeyDown}
         tabIndex={0}
       >
         {/* Simple Label */}
-        <div className="px-3 py-2 bg-[var(--accent)]/5 border-b border-border/30">
-          <span className="text-[10px] text-[var(--accent)] font-bold uppercase tracking-wider">
+        <div className="px-3 py-2 bg-(--accent)/5 border-b border-border/30">
+          <span className="text-[10px] text-(--accent) font-bold uppercase tracking-wider">
             Viewing Commit: <span className="font-mono">
               {commitHash.slice(0, 7) || 'unknown'}
             </span>
           </span>
         </div>
         {commitFiles.length === 0 && (
-          <div className="p-8 text-xs text-[var(--text-secondary)] font-mono text-center">
+          <div className="p-8 text-xs text-(--text-secondary) font-mono text-center">
             {error?.action === 'commit-diff' ? (
-              <span className="text-[var(--error,#ef4444)] font-bold uppercase tracking-widest">{error.message || 'Failed to load diff'}</span>
+              <span className="text-(--error,#ef4444) font-bold uppercase tracking-widest">{error.message || 'Failed to load diff'}</span>
             ) : commitDiff === null ? (
               'Loading diff…'
             ) : (
@@ -165,12 +165,12 @@ export default function FileTree() {
   // ── Working tree mode ─────────────────────────────────────────────────────
   if (!gitStatus || gitStatus.error) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-[var(--bg-base)]">
-        <div className="text-4xl mb-3 opacity-20 text-[var(--accent)]">⎇</div>
-        <p className="text-sm font-medium text-[var(--text-primary)] mb-1">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-(--bg-base)">
+        <div className="text-4xl mb-3 opacity-20 text-(--accent)">⎇</div>
+        <p className="text-sm font-medium text-(--text-primary) mb-1">
           {gitStatus?.error || 'No repository'}
         </p>
-        <p className="text-xs text-[var(--text-secondary)] max-w-[200px]">
+        <p className="text-xs text-(--text-secondary) max-w-50">
           {gitStatus?.details || 'Select a project with a git repository'}
         </p>
       </div>
@@ -179,17 +179,17 @@ export default function FileTree() {
 
   if (filesToRender.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-[var(--bg-base)]">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center bg-(--bg-base)">
         <div className="text-3xl mb-3 opacity-30 text-green-500">✓</div>
-        <p className="text-sm text-[var(--text-primary)]">Working tree clean</p>
-        <p className="text-xs text-[var(--text-secondary)] mt-1">No changes to commit</p>
+        <p className="text-sm text-(--text-primary)">Working tree clean</p>
+        <p className="text-xs text-(--text-secondary) mt-1">No changes to commit</p>
       </div>
     );
   }
 
   return (
     <div 
-      className="flex-1 overflow-y-auto min-h-0 pt-1 bg-[var(--bg-surface)] scrollbar-none outline-none"
+      className="flex-1 overflow-y-auto min-h-0 pt-1 bg-(--bg-surface) scrollbar-none outline-none"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >

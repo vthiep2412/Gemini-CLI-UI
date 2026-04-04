@@ -13,13 +13,13 @@ export default function RightPane() {
   const setMobileView = useGitStore(s => s.setMobileView);
   const isMobile = useMobile();
 
-  // Task: Implement the "nav and title touching gap check" algorithm
+  // Refs for detecting overlap between title and helper text
   const titleRef = React.useRef(null);
   const helperRef = React.useRef(null);
   const headerRef = React.useRef(null);
   const [isTitleCondensed, setIsTitleCondensed] = React.useState(false);
 
-  // Algorithm: Check if title and helper text are physicaly touching or too close
+  // Algorithm: Check if title and helper text are physically touching or too close
   const checkOverlap = React.useCallback(() => {
     if (!titleRef.current || !helperRef.current || isMobile) {
       if (isMobile) setIsTitleCondensed(false);
@@ -32,7 +32,7 @@ export default function RightPane() {
     // Gap: Helper's left edge - Title's right edge
     const gap = helperRect.left - titleRect.right;
     
-    // Threshold: collapse if gap < 20px, expand if gap > 120px
+    // Threshold: collapse if gap < 24px, expand if gap > 180px (hysteresis prevents flickering)
     if (gap < 24) {
       setIsTitleCondensed(true);
     } else if (gap > 180) {
@@ -56,22 +56,22 @@ export default function RightPane() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-surface)] overflow-hidden">
+    <div className="flex flex-col h-full bg-(--bg-surface) overflow-hidden">
       {/* Header */}
       <div 
         ref={headerRef}
-        className="flex items-center justify-between px-5 h-[3.3rem] flex-shrink-0 bg-[var(--bg-surface)] border-b border-border shadow-sm"
+        className="flex items-center justify-between px-5 h-[3.3rem] shrink-0 bg-(--bg-surface) border-b border-border shadow-sm"
       >
         <div className="flex items-center gap-3">
-          <GitGraph className="w-6 h-6 text-[var(--git-accent)]" />
+          <GitGraph className="w-6 h-6 text-(--git-accent)" />
           <span 
             ref={titleRef}
-            className={`text-[var(--text-primary)] opacity-90 uppercase tracking-[0.12em] whitespace-nowrap transition-all duration-300 ${isMobile ? 'text-xs font-bold' : 'text-sm font-black'}`}
+            className={`text-(--text-primary) opacity-90 uppercase tracking-[0.12em] whitespace-nowrap transition-all duration-300 ${isMobile ? 'text-xs font-bold' : 'text-sm font-black'}`}
           >
             {titleText}
           </span>
           {loadingGraph && (
-            <span className="text-xs text-[var(--text-secondary)] animate-pulse ml-3 font-mono font-bold">Syncing...</span>
+            <span className="text-xs text-(--text-secondary) animate-pulse ml-3 font-mono font-bold">Syncing...</span>
           )}
         </div>
         
@@ -86,7 +86,7 @@ export default function RightPane() {
         ) : (
           <div 
             ref={helperRef}
-            className="text-[11px] text-[var(--text-secondary)] font-mono uppercase tracking-widest opacity-80 font-bold pr-2 whitespace-nowrap"
+            className="text-[11px] text-(--text-secondary) font-mono uppercase tracking-widest opacity-80 font-bold pr-2 whitespace-nowrap"
           >
             Click commit to inspect changes
           </div>

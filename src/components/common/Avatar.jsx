@@ -33,7 +33,7 @@ function Avatar({ name, email, className = "" }) {
   const src = username ? `https://github.com/${username}.png` : '';
 
   return (
-    <div className={`w-8 h-8 rounded-full overflow-hidden bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[14px] flex-shrink-0 relative group/avatar shadow-sm ${className}`}>
+    <div className={`w-8 h-8 rounded-full overflow-hidden bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[14px] shrink-0 relative group/avatar shadow-sm ${className}`}>
       {username && (
         <img
           key={src}

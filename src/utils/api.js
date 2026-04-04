@@ -43,12 +43,17 @@ export const api = {
   projects: () => authenticatedFetch('/api/projects'),
   sessions: (projectName, limit = 5, offset = 0) => 
     authenticatedFetch(`/api/projects/${projectName}/sessions?limit=${limit}&offset=${offset}`),
-  sessionMessages: (projectName, sessionId) =>
-    authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}/messages`),
+  sessionMessages: (projectName, sessionId, options = {}) =>
+    authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}/messages`, options),
   renameProject: (projectName, displayName) =>
     authenticatedFetch(`/api/projects/${projectName}/rename`, {
       method: 'PUT',
       body: JSON.stringify({ displayName }),
+    }),
+  updateSessionSummary: (projectName, sessionId, summary) =>
+    authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}/summary`, {
+      method: 'PUT',
+      body: JSON.stringify({ summary }),
     }),
   deleteSession: (projectName, sessionId) =>
     authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}`, {

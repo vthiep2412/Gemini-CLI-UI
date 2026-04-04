@@ -56,7 +56,7 @@ const TodoList = ({ todos, isResult = false }) => {
           key={todo.id}
           className="flex items-start gap-3 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md dark:shadow-gray-900/50 transition-shadow"
         >
-          <div className="flex-shrink-0 mt-0.5">
+          <div className="shrink-0 mt-0.5">
             {getStatusIcon(todo.status)}
           </div>
           
@@ -66,7 +66,7 @@ const TodoList = ({ todos, isResult = false }) => {
                 {todo.content}
               </p>
               
-              <div className="flex gap-1 flex-shrink-0">
+              <div className="flex gap-1 shrink-0">
                 <Badge
                   variant="outline"
                   className={`text-xs px-2 py-0.5 ${getPriorityColor(todo.priority)}`}

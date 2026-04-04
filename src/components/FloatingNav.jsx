@@ -1,6 +1,6 @@
 import React from 'react';
 import { MessageSquare, Terminal, FolderTree, GitBranch, Bookmark } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useMobile } from '../hooks/useMobile';
 import { cn } from '../lib/utils';
 
@@ -19,10 +19,13 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject, forc
     ] : []),
   ], [selectedProject]);
 
+  // Track hover history to decide between "Float Out" and "Fade In"
+  const lastHoveredTab = React.useRef(null);
+  const [isLinked, setIsLinked] = React.useState(false);
+
   const activeIndex = tabs.findIndex(t => t.id === activeTab);
   const hoverIndex = tabs.findIndex(t => t.id === hoveredTab);
-  const isNeighbor = hoveredTab && Math.abs(activeIndex - hoverIndex) === 1;
-
+  const isNeighbor = hoveredTab && activeIndex >= 0 && Math.abs(activeIndex - hoverIndex) === 1;
   const springConfig = {
     type: "spring",
     stiffness: 700, // Faster for 'magnetic' feel
@@ -30,11 +33,35 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject, forc
     mass: 0.8
   };
 
+  const handleHoverEnter = (id) => {
+    // If we're starting a hover (from null) and it's a neighbor of active, link it to float out
+    const isStartingHover = lastHoveredTab.current === null;
+    const isTargetNeighbor = activeIndex >= 0 && Math.abs(tabs.findIndex(t => t.id === id) - activeIndex) === 1;
+    
+    if (isStartingHover && isTargetNeighbor) {
+      setIsLinked(true);
+    } else if (isStartingHover && !isTargetNeighbor) {
+      setIsLinked(false);
+    } else {
+      // Already hovering, keep it linked for the "follow-mouse" feel
+      setIsLinked(true);
+    }
+    
+    setHoveredTab(id);
+    lastHoveredTab.current = id;
+  };
+
+  const handleNavLeave = () => {
+    setHoveredTab(null);
+    lastHoveredTab.current = null;
+    setIsLinked(false);
+  };
+
   return (
     <nav 
-      onMouseLeave={() => setHoveredTab(null)}
+      onMouseLeave={handleNavLeave}
       className={cn(
-        "flex items-center backdrop-blur-md border border-white/20 dark:border-white/10 rounded-full transition-all duration-300",
+        "flex items-center backdrop-blur-md border border-white/20 dark:border-white/10 rounded-full transition-all duration-300 isolate",
         shouldCollapse 
           ? 'gap-1 bg-white/80 dark:bg-[#0a0f1e]/80 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.2)]' 
           : 'gap-0.5 bg-white/70 dark:bg-white/5 p-1 shadow-[0_12px_40px_rgba(0,0,0,0.15)]'
@@ -53,32 +80,41 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject, forc
           <motion.button
             key={tab.id}
             layout
-            onMouseEnter={() => setHoveredTab(tab.id)}
+            onMouseEnter={() => handleHoverEnter(tab.id)}
             whileTap={{ scale: 0.94 }}
             transition={springConfig}
             onClick={() => setActiveTab(tab.id)}
+            aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'relative flex items-center rounded-full text-sm transition-colors duration-200',
+              'relative flex items-center rounded-full text-sm transition-colors duration-200 isolate',
               shouldCollapse ? 'px-3 py-2 font-bold' : 'gap-2 px-3.5 sm:px-4.5 py-1.5 sm:py-2.5 font-medium',
               isActive 
-                ? 'text-white' 
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                ? 'text-white z-10' 
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white z-0'
             )}
           >
             {/* Active Pill Indicator */}
             {isActive && (
-              <motion.div
-                layoutId="nav-selection"
-                className="absolute inset-0 bg-blue-600 rounded-full -z-10 shadow-[0_4px_12px_rgba(37,99,235,0.45)]"
-                transition={springConfig}
-              />
+              <>
+                <motion.div
+                  layoutId="nav-selection"
+                  className="absolute inset-0 bg-blue-600 rounded-full -z-10 shadow-[0_4px_12px_rgba(37,99,235,0.45)]"
+                  transition={springConfig}
+                />
+                {/* Hidden "Source" Pill for neighbors to float out of */}
+                <motion.div
+                  layoutId="nav-hover"
+                  className="absolute inset-0 bg-transparent opacity-0 -z-20"
+                />
+              </>
             )}
 
             {/* Fluid Hover Pill (Docks into active) */}
             {isHovered && !isActive && (
               <motion.div
-                layoutId="nav-hover"
-                initial={false}
+                layoutId={isLinked ? "nav-hover" : undefined}
+                initial={isLinked ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
                 className={cn(
                   "absolute bg-blue-500/15 dark:bg-blue-400/20 -z-20",
                   // Basic rounded if not neighbor
@@ -92,7 +128,7 @@ const FloatingNav = React.memo(({ activeTab, setActiveTab, selectedProject, forc
             )}
 
             <Icon className={cn(
-              shouldCollapse ? 'w-[18px] h-[18px]' : 'w-[17px] h-[17px]',
+              shouldCollapse ? 'w-4.5 h-4.5' : 'w-4.25 h-4.25',
               isActive ? 'text-white' : 'transition-transform duration-200'
             )} />
             

@@ -1,11 +1,5 @@
 // Load environment variables from .env file
 import fs from 'fs';
-
-// Silence DEP0040 Punycode deprecation warning from dependencies
-process.on('warning', (warning) => {
-  if (warning.name === 'DeprecationWarning' && warning.code === 'DEP0040') return;
-  console.warn(warning);
-});
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -26,7 +20,7 @@ try {
     }
   });
 } catch (e) {
-  // console.log('No .env file found or error reading it:', e.message);
+  console.log('No .env file found or error reading it:', e.message);
 }
 
 // console.log('PORT from env:', process.env.PORT);
@@ -36,7 +30,7 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import cors from 'cors';
 import { promises as fsPromises } from 'fs';
-import { spawn, execSync, exec } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 const execAsync = promisify(exec);
 import os from 'os';
@@ -44,7 +38,7 @@ import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
 
-import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
+import { getProjects, renameProject, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnGemini, abortGeminiSession } from './gemini-cli.js';
 import sessionManager from './sessionManager.js';
 import gitRoutes from './routes/git.js';
@@ -82,10 +76,11 @@ const detectShells = async () => {
     for (const shell of commonPaths) {
       try {
         // Try specific path first
-        if (fs.existsSync(shell.path)) {
+        try {
+          await fsPromises.access(shell.path);
           shells.push(shell);
           continue;
-        }
+        } catch (err) { console.warn('Caught suppressed error:', err.message); }
         
         // Check if in PATH
         const shellExeName = {
@@ -106,9 +101,10 @@ const detectShells = async () => {
           }
         } catch (e) {
           // If where.exe fails, we just continue (it means shell isn't in PATH)
+          console.warn(`Could not find shell ${shell.name}:`, e.message);
         }
       } catch (e) {
-        // console.warn(`Could not find shell ${shell.name}:`, e.message);
+        console.warn(`Could not find shell ${shell.name}:`, e.message);
       }
     }
   } else {
@@ -123,7 +119,7 @@ const detectShells = async () => {
         if (fs.existsSync(shell.path)) {
           shells.push(shell);
         }
-      } catch (e) {}
+      } catch (err) { console.warn('Caught suppressed error:', err.message); }
     }
   }
   
@@ -137,7 +133,7 @@ const detectShells = async () => {
 
 // Check if a process (by PID) is idle (no child processes)
 const isProcessIdle = async (pid) => {
-  if (!pid) return true;
+  if (!pid || typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return true;
   try {
     const isWindows = os.platform() === 'win32';
     if (isWindows) {
@@ -147,7 +143,7 @@ const isProcessIdle = async (pid) => {
         const { stdout } = await execAsync(psCommand, { timeout: 2000 });
         const lines = stdout.trim().split(/\s+/).filter(line => line.trim() && !isNaN(parseInt(line)));
         if (lines.length > 0) return false;
-      } catch (err) {}
+      } catch (err) { console.warn('Caught suppressed error:', err.message); }
 
       // 2. Specialized check for WSL if no Windows children found
       try {
@@ -161,7 +157,9 @@ const isProcessIdle = async (pid) => {
           const activeCount = parseInt(wslOutput.trim());
           return isNaN(activeCount) || activeCount === 0;
         }
-      } catch (wslErr) {}
+      } catch (wslErr) {
+        console.warn("Caught suppressed error:", wslErr.message);
+      }
       
       return true;
     } else {
@@ -170,6 +168,7 @@ const isProcessIdle = async (pid) => {
       return stdout.trim() === '';
     }
   } catch (e) {
+    console.warn("Caught suppressed error:", e.message);
     return true; // Assume idle if error or timeout
   }
 };
@@ -259,7 +258,7 @@ async function setupProjectsWatcher() {
           });
           
         } catch (error) {
-          // console.error('❌ Error handling project changes:', error);
+          console.error('Error handling project changes:', error);
         }
       }, 300); // 300ms debounce (slightly faster than before)
     };
@@ -272,13 +271,13 @@ async function setupProjectsWatcher() {
       .on('addDir', (dirPath) => debouncedUpdate('addDir', dirPath))
       .on('unlinkDir', (dirPath) => debouncedUpdate('unlinkDir', dirPath))
       .on('error', (error) => {
-        // console.error('❌ Chokidar watcher error:', error);
+        console.error('Chokidar watcher error:', error);
       })
       .on('ready', () => {
       });
     
   } catch (error) {
-    // console.error('❌ Failed to setup projects watcher:', error);
+    console.error('Failed to setup projects watcher:', error);
   }
 }
 
@@ -332,7 +331,7 @@ function watchGitFolder(projectPath, projectName) {
       };
 
       watcher.on('all', broadcast).on('error', (err) => {
-        console.debug(`[GitWatcher] Error for ${projectPath}:`, err);
+        console.debug(`[GitWatcher] Error for ${projectPath}:`, err.message);
       });
 
       // Cleanup on close
@@ -483,7 +482,7 @@ app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, re
 // Get messages for a specific session
 app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateToken, async (req, res) => {
   try {
-    const { projectName, sessionId } = req.params;
+    const { sessionId } = req.params;
     const messages = sessionManager.getSessionMessages(sessionId);
     res.json({ messages });
   } catch (error) {
@@ -502,12 +501,18 @@ app.put('/api/projects/:projectName/rename', authenticateToken, async (req, res)
   }
 });
 
-// Delete session endpoint
-app.delete('/api/projects/:projectName/sessions/:sessionId', authenticateToken, async (req, res) => {
+// Rename session summary endpoint
+app.put('/api/projects/:projectName/sessions/:sessionId/summary', authenticateToken, async (req, res) => {
   try {
-    const { projectName, sessionId } = req.params;
-    await sessionManager.deleteSession(sessionId);
-    res.json({ success: true });
+    const { sessionId } = req.params;
+    const { summary } = req.body;
+    
+    if (!summary || !summary.trim()) {
+      return res.status(400).json({ error: 'Summary is required' });
+    }
+    
+    const success = sessionManager.updateSessionSummary(sessionId, summary);
+    res.json({ success });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -543,7 +548,7 @@ async function isPathInsideProject(projectName, filePath) {
     const realFile = await fsPromises.realpath(filePath);
     const rel = path.relative(realProject, realFile);
     return !rel.startsWith('..') && !path.isAbsolute(rel);
-  } catch (error) {
+  } catch {
     return false; // Fail safely on invalid project names, nonexistent files, or realpath errors
   }
 }
@@ -623,7 +628,7 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     // Check if file exists
     try {
       await fsPromises.access(filePath);
-    } catch (error) {
+    } catch {
       return res.status(404).json({ error: 'File not found' });
     }
     
@@ -635,7 +640,7 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
     
-    fileStream.on('error', (error) => {
+    fileStream.on('error', () => {
       // console.error('Error streaming file:', error);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error reading file' });
@@ -643,7 +648,7 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     });
     
   } catch (error) {
-    // console.error('Error serving binary file:', error);
+    console.error('Error serving binary file:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: error.message });
     }
@@ -680,7 +685,7 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
       await fsPromises.copyFile(filePath, backupPath);
       // console.log('📋 Created backup:', backupPath);
     } catch (backupError) {
-      // console.warn('Could not create backup:', backupError.message);
+      console.warn('Could not create backup:', backupError.message);
     }
     
     // Write the new content
@@ -728,7 +733,13 @@ app.put('/api/projects/:projectName/file/rename', authenticateToken, async (req,
     await fsPromises.rename(oldPath, newPath);
     res.json({ success: true, oldPath, newPath });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error.code === 'ENOENT') {
+      res.status(404).json({ error: 'Source file or directory not found' });
+    } else if (error.code === 'EACCES' || error.code === 'EPERM') {
+      res.status(403).json({ error: 'Permission denied' });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
@@ -775,7 +786,7 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
     try {
       actualPath = await extractProjectDirectory(req.params.projectName);
     } catch (error) {
-      // console.error('Error extracting project directory:', error);
+      console.error('Error extracting project directory:', error);
       // Fallback to simple dash replacement
       actualPath = req.params.projectName.replace(/-/g, '/');
     }
@@ -783,12 +794,11 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
     // Check if path exists
     try {
       await fsPromises.access(actualPath);
-    } catch (e) {
+    } catch {
       return res.status(404).json({ error: `Project path not found: ${actualPath}` });
     }
     
     const files = await getFileTree(actualPath, 3, 0, true);
-    const hiddenFiles = files.filter(f => f.name.startsWith('.'));
     res.json(files);
   } catch (error) {
     // console.error('❌ File tree error:', error.message);
@@ -914,8 +924,7 @@ function handleShellConnection(ws) {
         // First send a welcome message 
         ws.send(JSON.stringify({
           type: 'output',
-          data: `\r\n\x1b[1;36m[SERVER] Spawning ${shell}...\x1b[0m\r\n\x1b[2mDirectory: ${projectPath}\x1b[0m\r\n\r\n`,
-          pid: 0
+          data: `\r\n\x1b[1;36m[SERVER] Spawning ${shell}...\x1b[0m\r\n\x1b[2mDirectory: ${projectPath}\x1b[0m\r\n\r\n`
         }));
         
         // Resolve project path to ensure compatibility across OS
@@ -924,7 +933,7 @@ function handleShellConnection(ws) {
           // path.resolve already returns a normalized absolute path
           // Verify directory exists
           await fsPromises.access(normalizedProjectPath);
-        } catch (err) {
+        } catch {
           normalizedProjectPath = process.cwd();
           ws.send(JSON.stringify({
            type: 'output',
@@ -941,7 +950,7 @@ function handleShellConnection(ws) {
               } else {
                 shellProcess.kill();
               }
-            } catch (e) {}
+            } catch (e) {console.warn("Caught suppressed error:", e);}
           }
           
           let shellArgs = [];
@@ -988,6 +997,7 @@ function handleShellConnection(ws) {
               let outputData = data;
               
               // Check for various URL opening patterns
+              /* eslint-disable no-control-regex */
               const patterns = [
                 /(?:xdg-open|open|start)\s+(https?:\/\/[^\s\x1b\x07]+)/g,
                 /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
@@ -996,6 +1006,7 @@ function handleShellConnection(ws) {
                 /View at:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
                 /Browse to:\s*(https?:\/\/[^\s\x1b\x07]+)/gi
               ];
+              /* eslint-enable no-control-regex */
               
               patterns.forEach(pattern => {
                 let match;
@@ -1041,7 +1052,7 @@ function handleShellConnection(ws) {
         if (shellProcess && shellProcess.write) {
           try {
             shellProcess.write(data.data);
-          } catch (error) {}
+          } catch (e) {console.warn("Caught suppressed error:", e);}
         }
       } else if (data.type === 'resize') {
         if (shellProcess && shellProcess.resize) {
@@ -1068,13 +1079,13 @@ function handleShellConnection(ws) {
         } else {
           shellProcess.kill();
         }
-      } catch (e) {}
+      } catch (e) {console.warn("Caught suppressed error:", e);}
       shellProcess = null;
     }
   });
   
   ws.on('error', (error) => {
-    // console.error('❌ Shell WebSocket error:', error);
+    console.error('Shell WebSocket error:', error);
   });
 }
 // Audio transcription endpoint
@@ -1209,7 +1220,7 @@ Agent instructions:`;
           }
           
         } catch (gptError) {
-          // console.error('GPT processing error:', gptError);
+          console.error('GPT processing error:', gptError);
           // Fall back to original transcription if GPT fails
         }
         
@@ -1221,7 +1232,7 @@ Agent instructions:`;
       }
     });
   } catch (error) {
-    // console.error('Endpoint error:', error);
+    console.error('Endpoint error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1298,7 +1309,7 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
         );
         
         res.json({ images: processedImages });
-      } catch (error) {
+      } catch {
         // console.error('Error processing images:', error);
         // Clean up any remaining files
         await Promise.all(req.files.map(f => fs.unlink(f.path).catch(() => {})));
@@ -1306,7 +1317,7 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
       }
     });
   } catch (error) {
-    // console.error('Error in image upload endpoint:', error);
+    console.error('Error in image upload endpoint:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -1360,7 +1371,7 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
         const otherPerm = mode & 7;
         item.permissions = ((mode >> 6) & 7).toString() + ((mode >> 3) & 7).toString() + (mode & 7).toString();
         item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
-      } catch (statError) {
+      } catch {
         // If stat fails, provide default values
         item.size = 0;
         item.modified = null;
@@ -1374,7 +1385,7 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
           // Check if we can access the directory before trying to read it
           await fsPromises.access(item.path, fs.constants.R_OK);
           item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
-        } catch (e) {
+        } catch {
           // Silently skip directories we can't access (permission denied, etc.)
           item.children = [];
         }
@@ -1413,7 +1424,7 @@ async function startServer() {
       await setupProjectsWatcher(); // Re-enabled with better-sqlite3
     });
   } catch (error) {
-    // console.error('❌ Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 }
@@ -1456,7 +1467,8 @@ async function handleShutdown(signal) {
   const closePromise = new Promise((resolve, reject) => {
     server.close((err) => {
       clearTimeout(shutdownTimer);
-      err ? reject(err) : resolve();
+      if (err) { reject(err); }
+      else { resolve(); }
     });
   }).catch((err) => console.log('\x1b[33m[Shutdown] Server close ignored error:\x1b[0m', err.message));
 

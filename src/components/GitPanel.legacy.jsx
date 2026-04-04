@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+/* eslint-disable */
+// FILE IS LEGACY/GHOST, AI PLS DO NOT TOUCH
+import { useState, useEffect, useRef } from 'react';
 import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, ChevronRight, Info, History, FileText, Mic, MicOff, Sparkles, Download, RotateCcw, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { MicButton } from './MicButton.jsx';
 import { authenticatedFetch } from '../utils/api';
@@ -523,7 +525,7 @@ function GitPanel({ selectedProject, isMobile }) {
                   {commit.author} • {commit.date}
                 </p>
               </div>
-              <span className="text-xs font-mono text-gray-400 dark:text-gray-500 flex-shrink-0">
+              <span className="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">
                 {commit.hash.substring(0, 7)}
               </span>
             </div>
@@ -580,8 +582,9 @@ function GitPanel({ selectedProject, isMobile }) {
                 >
                   <Trash2 className="w-3 h-3" />
                   {isMobile && <span>Discard</span>}
-              {/* Fetch button - show when ahead only or when diverged (secondary action) */}
-              {remoteStatus.ahead > 0 && (              <span 
+                </button>
+              )}
+              <span 
                 className={`inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold border ${
                   status === 'M' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800' :
                   status === 'A' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-200 dark:border-green-800' :
@@ -597,7 +600,7 @@ function GitPanel({ selectedProject, isMobile }) {
         </div>
         <div className={`bg-gray-50 dark:bg-gray-900 transition-all duration-400 ease-in-out overflow-hidden ${
           isExpanded && diff 
-            ? 'max-h-[600px] opacity-100 translate-y-0' 
+            ? 'max-h-150 opacity-100 translate-y-0' 
             : 'max-h-0 opacity-0 -translate-y-1'
         }`}>
             {/* Operation header */}

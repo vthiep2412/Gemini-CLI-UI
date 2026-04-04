@@ -54,7 +54,7 @@ export function useAudioRecorder() {
       };
 
       recorder.onerror = (event) => {
-        // console.error('MediaRecorder error:', event);
+        console.error('MediaRecorder error:', event);
         setError('Recording failed');
         setRecording(false);
       };
@@ -64,7 +64,7 @@ export function useAudioRecorder() {
       setRecording(true);
       // Debug - Recording started
     } catch (err) {
-      // console.error('Failed to start recording:', err);
+      console.error('Failed to start recording:', err);
       setError(err.message || 'Failed to start recording');
       setRecording(false);
     }
@@ -79,7 +79,7 @@ export function useAudioRecorder() {
         // Debug - Recording stopped
       }
     } catch (err) {
-      // console.error('Error stopping recorder:', err);
+      console.error('Error stopping recorder:', err);
     }
     
     // Always update state

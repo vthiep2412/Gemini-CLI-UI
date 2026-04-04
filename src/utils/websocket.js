@@ -48,8 +48,8 @@ export function useWebSocket() {
           const apiPort = window.location.port === '4009' ? '4008' : window.location.port;
           wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
         }
-      } catch (error) {
-        // console.warn('Could not fetch server config, falling back to current host with API server port');
+      } catch (e) {
+        console.warn('Could not fetch server config, falling back to current host with API server port', e);
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         // For development, API server is typically on port 4008 when Vite is on 4009
         const apiPort = window.location.port === '4009' ? '4008' : window.location.port;
@@ -76,7 +76,7 @@ export function useWebSocket() {
             setMessages(prev => [...prev, data]);
           }
         } catch (error) {
-          // console.error('Error parsing WebSocket message:', error);
+          console.error('Error parsing WebSocket message:', error);
         }
       };
 
@@ -91,11 +91,11 @@ export function useWebSocket() {
       };
 
       websocket.onerror = (error) => {
-        // console.error('WebSocket error:', error);
+        console.error('WebSocket error:', error);
       };
 
     } catch (error) {
-      // console.error('Error creating WebSocket connection:', error);
+      console.error('Error creating WebSocket connection:', error);
     }
   };
 

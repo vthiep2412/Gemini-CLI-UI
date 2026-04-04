@@ -130,13 +130,14 @@ export async function playNotificationSound() {
     
     // Create gain node for volume control
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = 0.5; // 50% volume
+    gainNode.gain.value = settings.notificationSoundVolume ?? 0.5; // Default to 50% volume
+    // TODO: Add notification sound customize to settings.
     
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
     source.start();
     
   } catch (error) {
-    // console.error('Failed to play notification sound:', error);
+    console.error('Failed to play notification sound:', error);
   }
-}
+}

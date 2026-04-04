@@ -1,20 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronLeft, 
   ChevronRight, 
   Maximize2, 
   Eye, 
-  Settings2,
-  Moon,
-  Sun,
+  Settings2, Settings,
+  Moon, Sun,
   ArrowDown,
-  Mic,
-  Brain,
-  Sparkles,
-  FileText,
-  Settings,
-  X,
-  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import DarkModeToggle from './DarkModeToggle';
@@ -78,7 +69,7 @@ const QuickSettingsPanel = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={handleToggle}
-              className="fixed inset-0 bg-black/10 backdrop-blur-[2px] z-[100] pointer-events-auto"
+              className="fixed inset-0 bg-black/10 backdrop-blur-[2px] z-100 pointer-events-auto"
             />
 
             {/* Panel Content */}
@@ -87,7 +78,8 @@ const QuickSettingsPanel = ({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className={`fixed top-0 right-0 h-full w-72 bg-background/80 dark:bg-card/70 backdrop-blur-2xl border-l border-border/50 shadow-2xl z-[101] flex flex-col pointer-events-auto ${
+              // tailwind v4
+              className={`fixed top-0 right-0 h-full w-72 bg-background/80 dark:bg-card/70 backdrop-blur-2xl border-l border-border/50 shadow-2xl z-101 flex flex-col pointer-events-auto ${
                 isMobile ? 'w-full' : ''
               }`}
             >
@@ -96,7 +88,7 @@ const QuickSettingsPanel = ({
                   <div className="p-2 bg-blue-600/10 rounded-xl">
                     <Settings2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <h3 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-400">
+                  <h3 className="text-lg font-bold bg-clip-text text-transparent bg-linear-to-r from-blue-600 to-cyan-500 dark:from-blue-400 dark:to-cyan-400">
                     Quick Access
                   </h3>
                 </div>

@@ -4,7 +4,7 @@
  * commit-view mode (read-only, with expandable inline diff).
  */
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Check, Trash2, AlignLeft, ArrowLeftRight, Plus, Minus } from 'lucide-react';
+import { ChevronRight, Check, Trash2, AlignLeft, ArrowLeftRight, Plus, Minus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -129,7 +129,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         setDiffError(null);
         try {
           await fetchFileDiff(filePath, signal);
-        } catch (err) {
+        } catch {
           if (!signal.aborted) {
             setDiffError('Failed to load diff');
           }
@@ -153,14 +153,14 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
   const dirPart = parts.length > 0 ? parts.join('/') + '/' : '';
 
   const rowBgClass = isDarkMode 
-    ? (expanded ? 'bg-[var(--bg-muted)]/20' : isFocused ? 'bg-[var(--bg-muted)]/40' : '')
+    ? (expanded ? 'bg-(--bg-muted)/20' : isFocused ? 'bg-(--bg-muted)/40' : '')
     : (expanded ? 'bg-slate-100' : isFocused ? 'bg-slate-200' : '');
 
   return (
-    <div className={`transition-colors truncate border-b border-border/50 ${isFocused ? 'ring-1 ring-inset ring-[var(--git-accent)] bg-[var(--git-accent)]/5' : ''}`}>
+    <div className={`transition-colors truncate border-b border-border/50 ${isFocused ? 'ring-1 ring-inset ring-(--git-accent) bg-(--git-accent)/5' : ''}`}>
       <div
         ref={rowRef}
-        className={`flex items-center gap-2 px-3 py-1.5 ${isDarkMode ? 'hover:bg-[var(--bg-muted)]/30' : 'hover:bg-slate-200/60'} group cursor-pointer transition-all duration-200
+        className={`flex items-center gap-2 px-3 py-1.5 ${isDarkMode ? 'hover:bg-(--bg-muted)/30' : 'hover:bg-slate-200/60'} group cursor-pointer transition-all duration-200
           ${rowBgClass}`}
         onClick={handleExpand}
         onKeyDown={(e) => {
@@ -174,11 +174,11 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         aria-expanded={expanded}
       >
         <ChevronRight
-          className={`w-3 h-3 flex-shrink-0 text-[var(--text-secondary)] transition-all duration-300 transform-gpu ${expanded ? 'rotate-90 text-[var(--git-accent)]' : ''}`}
+          className={`w-3 h-3 shrink-0 text-(--text-secondary) transition-all duration-300 transform-gpu ${expanded ? 'rotate-90 text-(--git-accent)' : ''}`}
         />
         <span className="flex-1 min-w-0 text-[11px] font-mono truncate">
-          <span className="text-[var(--text-secondary)] opacity-70">{dirPart}</span>
-          <span className="text-[var(--text-primary)] font-medium">{fileName}</span>
+          <span className="text-(--text-secondary) opacity-70">{dirPart}</span>
+          <span className="text-(--text-primary) font-medium">{fileName}</span>
         </span>
 
         <div className={`flex items-center gap-1 transition-all duration-200 ${isMobile ? 'opacity-100 px-1' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -188,7 +188,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
                 e.stopPropagation(); 
                 setIsSideBySide(prev => prev === null ? true : !prev); 
               }}
-              className={`p-1 rounded transition-all text-[var(--text-secondary)] opacity-60 hover:opacity-100
+              className={`p-1 rounded transition-all text-(--text-secondary) opacity-60 hover:opacity-100
                 ${isDarkMode ? 'hover:bg-white/10' : 'hover:bg-slate-300/50'}`}
             >
               {isSideBySide === true ? <AlignLeft size={13} /> : <ArrowLeftRight size={13} />}
@@ -203,7 +203,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
                     aria-label={confirming ? 'Confirm discard' : 'Discard changes'}
                     onClick={handleDiscard}
                     onBlur={() => setConfirming(false)}
-                    className={`p-1 rounded transition-all ${confirming ? 'bg-rose-500 text-white' : 'text-[var(--text-secondary)] hover:bg-rose-500/10 hover:text-rose-400'}`}
+                    className={`p-1 rounded transition-all ${confirming ? 'bg-rose-500 text-white' : 'text-(--text-secondary) hover:bg-rose-500/10 hover:text-rose-400'}`}
                   >
                     {confirming ? <Check className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
                   </button>
@@ -236,7 +236,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         </div>
 
         <Tooltip label={cfg.label}>
-          <span className={`flex-shrink-0 w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm group-hover:scale-110`}>
+          <span className={`shrink-0 w-4.5 h-4.5 flex items-center justify-center text-[10px] font-bold rounded transition-all ${cfg.bg} ${cfg.text} ${cfg.border} shadow-sm group-hover:scale-110`}>
             {status === '??' ? 'U' : status}
           </span>
         </Tooltip>
@@ -249,16 +249,16 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.4, ease: [0.04, 0.62, 0.23, 0.98] }}
-            className={`overflow-hidden ${isDarkMode ? 'bg-[var(--bg-base)]/30' : 'bg-slate-50 border-t border-border/30'}`}
+            className={`overflow-hidden ${isDarkMode ? 'bg-(--bg-base)/30' : 'bg-slate-50 border-t border-border/30'}`}
           >
             <div>
-              <div className={`flex items-center gap-2 px-4 py-1.5 ${isDarkMode ? 'bg-[var(--bg-surface)]/30' : 'bg-white border-b border-border/20'}`}>
+              <div className={`flex items-center gap-2 px-4 py-1.5 ${isDarkMode ? 'bg-(--bg-surface)/30' : 'bg-white border-b border-border/20'}`}>
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.text} ${cfg.border}`}>{cfg.label}</span>
-                <span className="text-[10px] text-[var(--text-secondary)] font-mono truncate opacity-60">{filePath}</span>
+                <span className="text-[10px] text-(--text-secondary) font-mono truncate opacity-60">{filePath}</span>
               </div>
               <div className="overflow-hidden">
                 {diffLoading || (!diff && mode !== 'commit-view') ? (
-                  <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading diff...</div>
+                  <div className="p-3 text-[10px] text-(--text-secondary) font-mono animate-pulse">Loading diff...</div>
                 ) : diffError ? (
                   <div className="p-3 text-[10px] text-red-500 font-mono">{diffError}</div>
                 ) : diff ? (
@@ -269,7 +269,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
                     renderSideBySide={isSideBySide === null ? undefined : isSideBySide}
                   />
                 ) : (
-                   <div className="p-3 text-[10px] text-[var(--text-secondary)] font-mono">No diff available</div>
+                   <div className="p-3 text-[10px] text-(--text-secondary) font-mono">No diff available</div>
                 )}
               </div>
             </div>

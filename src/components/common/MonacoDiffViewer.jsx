@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMobile } from '../../hooks/useMobile';
+import { deepDarkTheme } from '../../utils/theme';
 
 export default function MonacoDiffViewer({ original, modified, language = 'javascript', height = '300px', renderSideBySide: controlledSideBySide }) {
   const containerRef = useRef(null);
@@ -47,8 +48,11 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
         model?.original?.dispose();
         model?.modified?.dispose();
         ref.editor.dispose();
-      } catch (_) {
-        // Silently ignore — editor may have already been cleaned up by React
+      } catch (e) {
+        // Expected if editor already cleaned up by React; log others in dev
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('MonacoDiffViewer cleanup:', e);
+        }
       }
       editorRef.current = null;
     };
@@ -69,16 +73,71 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
   }, [renderSideBySide]);
 
   const handleBeforeMount = (monaco) => {
-    monaco.editor.defineTheme('deep-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: '', background: '0a0f1e' },
-      ],
-      colors: {
-        'editor.background': '#0a0f1e',
-      }
+    // Specialize JavaScript/TypeScript tokenization to match VS Code "Pink" keywords and "Yellow" functions
+    ['javascript', 'typescript'].forEach(langId => {
+      const controlKeywords = [
+        'break', 'case', 'catch', 'continue', 'debugger', 'default', 'do', 'else',
+        'finally', 'for', 'if', 'return', 'switch', 'throw', 'try', 'while', 'async', 'await'
+      ];
+      
+      const otherKeywords = [
+        'class', 'const', 'constructor', 'delete', 'export', 'extends', 'false',
+        'from', 'function', 'get', 'import', 'in', 'instanceof', 'let', 'new',
+        'null', 'set', 'static', 'super', 'symbol', 'this', 'true', 'typeof',
+        'undefined', 'var', 'void', 'with', 'yield', 'of'
+      ];
+
+      monaco.languages.setMonarchTokensProvider(langId, {
+        keywords: otherKeywords,
+        controlKeywords: controlKeywords,
+        tokenizer: {
+          root: [
+            // Member expressions / Function calls (The Yellow functions)
+            [/[a-zA-Z_$][\w$]*(?=\s*\()/, 'function'],
+
+            // Identifiers and keywords
+            [/[a-z_$][\w$]*/, {
+              cases: {
+                '@controlKeywords': 'keyword.control',
+                '@keywords': 'keyword',
+                '@default': 'identifier'
+              }
+            }],
+            { include: '@whitespace' },
+            [/[{}()[\]]/, '@brackets'],
+            [/[<>](?!@symbols)/, '@brackets'],
+            [/@symbols/, { cases: { '@default': 'operator' } }],
+            [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
+            [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+            [/\d+/, 'number'],
+            [/"([^"\\]|\\.)*$/, 'string.invalid'],
+            [/'([^'\\]|\\.)*$/, 'string.invalid'],
+            [/"/, 'string', '@string_double'],
+            [/'/, 'string', '@string_single'],
+            [/`/, 'string', '@string_backtick'],
+          ],
+          whitespace: [
+            [/[ \t\r\n]+/, ''],
+            [/\/\*\*/, 'comment.doc', '@jsdoc'],
+            [/\/\*/, 'comment', '@comment'],
+            [/\/\/.*$/, 'comment'],
+          ],
+          comment: [[/[^/*]+/, 'comment'], [/\*\//, 'comment', '@pop'], [/[/*]/, 'comment']],
+          jsdoc: [[/[^/*]+/, 'comment.doc'], [/\*\//, 'comment.doc', '@pop'], [/[/*]/, 'comment.doc']],
+          string_double: [[/[^\\"]+/, 'string'], [/@escapes/, 'string.escape'], [/\\./, 'string.escape.invalid'], [/"/, 'string', '@pop']],
+          string_single: [[/[^\\']+/, 'string'], [/@escapes/, 'string.escape'], [/\\./, 'string.escape.invalid'], [/'/, 'string', '@pop']],
+          string_backtick: [
+            [/\$\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
+            [/[^\\`$]+/, 'string'], [/@escapes/, 'string.escape'], [/\\./, 'string.escape.invalid'], [/`/, 'string', '@pop']
+          ],
+          bracketCounting: [[/\{/, 'delimiter.bracket', '@push'], [/\}/, 'delimiter.bracket', '@pop'], { include: 'root' }],
+        },
+        symbols: /[=><!~?:&|+\-*/^%]+/,
+        escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+      });
     });
+
+    monaco.editor.defineTheme('deep-dark', deepDarkTheme);
   };
 
   const handleMount = (editor, monaco) => {
@@ -107,6 +166,11 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
           wordWrap: 'on',
           lineNumbersMinChars: 4,
           renderIndicators: true,
+          semanticHighlighting: true,
+          'bracketPairColorization.enabled': true,
+          fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace",
+          fontSize: isMobile ? 12 : 13,
+          fontLigatures: false, // User prefers separate characters for ===
         }}
       />
     </div>

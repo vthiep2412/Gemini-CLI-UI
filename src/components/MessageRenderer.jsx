@@ -23,7 +23,7 @@ SyntaxHighlighter.registerLanguage('markup', html);
 SyntaxHighlighter.registerLanguage('sh', bash);
 SyntaxHighlighter.registerLanguage('js', js);
 
-const CodeBlock = ({ language, value, inline, isDarkMode, className }) => {
+const CodeBlock = ({ language, value, isDarkMode }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -34,14 +34,6 @@ const CodeBlock = ({ language, value, inline, isDarkMode, className }) => {
       console.error('Failed to copy code');
     });
   };
-
-  if (inline) {
-    return (
-      <code className="px-1.5 py-0.5 mx-0.5 bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 rounded text-sm font-mono">
-        {value}
-      </code>
-    );
-  }
 
   return (
     <div className="relative group my-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -142,7 +134,7 @@ export const MessageRenderer = ({ content, isDarkMode = true }) => {
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
-          code: ({ node, inline, className, children, ...props }) => {
+          code: ({ inline, children }) => {
             // For inline code, just render simple styled code
             if (inline) {
               return (
@@ -154,7 +146,7 @@ export const MessageRenderer = ({ content, isDarkMode = true }) => {
             // Block code is handled by the pre component
             return <>{children}</>;
           },
-          pre: ({ node, children, ...props }) => {
+          pre: ({ children }) => {
             // Extract the code content from pre > code structure
             if (children && children.props) {
               const { className, children: codeContent } = children.props;
@@ -166,7 +158,6 @@ export const MessageRenderer = ({ content, isDarkMode = true }) => {
                 <CodeBlock
                   language={language}
                   value={value}
-                  inline={false}
                   isDarkMode={isDarkMode}
                 />
               );
