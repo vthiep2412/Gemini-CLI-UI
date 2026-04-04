@@ -48,54 +48,51 @@ function FileRow({
       onContextMenu={(e) => onContextMenu(e, item)}
       className={cn(
         'flex items-center gap-2.5 py-[4.5px] pr-2 rounded-sm cursor-pointer select-none group',
-        'hover:bg-[var(--bg-muted)]/40 transition-colors duration-100',
-        activeFilePath === item.path && 'bg-[var(--bg-muted)]/60 text-[var(--text-primary)]',
-        isRenaming && 'bg-[var(--bg-muted)]/80 ring-1 ring-[var(--git-accent)]/50'
+        'hover:bg-(--bg-muted)/40 transition-colors duration-100',
+        activeFilePath === item.path && 'bg-(--bg-muted)/60 text-(--text-primary)',
+        isRenaming && 'bg-(--bg-muted)/80 ring-1 ring-(--git-accent)/50'
       )}
       style={{ paddingLeft: `${indent}px` }}
       onClick={() => !isRenaming && onClickItem(item)}
     >
-      <FileIcon filename={item.name} isFolder={isDir} isOpen={isExpanded} size={19} className="flex-shrink-0" />
+      <FileIcon filename={item.name} isFolder={isDir} isOpen={isExpanded} size={19} className="shrink-0" />
 
       <div className="flex-1 min-w-0 flex items-center gap-2">
         {isRenaming ? (
           <div className="flex items-center gap-1 w-full mr-2">
             <input
               autoFocus
-              className="flex-1 bg-[var(--bg-base)] border border-[var(--git-accent)]/50 rounded px-1.5 py-0.5 text-[14.5px] outline-none focus:ring-2 focus:ring-[var(--git-accent)]/20"
+              className="flex-1 bg-(--bg-base) border border-(--git-accent)/50 rounded px-1.5 py-0.5 text-[14.5px] outline-none focus:ring-2 focus:ring-(--git-accent)/20"
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              onBlur={(e) => {
-                // Don't cancel if focus moved to a related action button
-                if (!e.relatedTarget?.closest('[data-rename-action]')) {
-                  onRenameCancel();
-                }
+              onBlur={() => {
+                onRenameCancel();
               }}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
         ) : (
           <>
-            <span className="text-[14.5px] truncate text-[var(--text-primary)] opacity-85 flex-1">
+            <span className="text-[14.5px] truncate text-(--text-primary) opacity-85 flex-1">
               {item.name}
             </span>
             
             {viewMode === 'compact' && !isDir && (
-              <span className="text-[11px] text-[var(--text-secondary)] opacity-50 flex-shrink-0 font-mono pr-2">
+              <span className="text-[11px] text-(--text-secondary) opacity-50 shrink-0 font-mono pr-2">
                 {formatFileSize(item.size)}
               </span>
             )}
 
             {viewMode === 'detailed' && (
               <>
-                <span className="text-[12px] text-[var(--text-secondary)] opacity-50 font-mono flex-shrink-0" style={{ width: 64 }}>
+                <span className="text-[12px] text-(--text-secondary) opacity-50 font-mono shrink-0" style={{ width: 64 }}>
                   {isDir ? '—' : formatFileSize(item.size)}
                 </span>
-                <span className="text-[12px] text-[var(--text-secondary)] opacity-50 flex-shrink-0" style={{ width: 88 }}>
+                <span className="text-[12px] text-(--text-secondary) opacity-50 shrink-0" style={{ width: 88 }}>
                   {formatRelativeTime(item.modified)}
                 </span>
-                <span className="text-[12px] text-[var(--text-secondary)] opacity-40 font-mono flex-shrink-0" style={{ width: 68 }}>
+                <span className="text-[12px] text-(--text-secondary) opacity-40 font-mono shrink-0" style={{ width: 68 }}>
                   {item.permissionsRwx || '—'}
                 </span>
               </>
@@ -143,7 +140,7 @@ function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
       ref={menuRef}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: isVisible ? 1 : 0, scale: isVisible ? 1 : 0.95 }}
-      className="fixed z-[9999] min-w-[160px] p-1.5 rounded-lg shadow-2xl border border-white/5 backdrop-blur-md"
+      className="fixed z-9999 min-w-40 p-1.5 rounded-lg shadow-2xl border border-white/5 backdrop-blur-md"
       style={{ 
         left: adjustedPos.x, 
         top: adjustedPos.y,
@@ -320,6 +317,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
       toast.success('Deleted successfully');
       fetchFiles(true);
     } catch (err) {
+      console.error('Delete failed:', err);
       toast.error('Error deleting file');
     }
   };
@@ -368,16 +366,16 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-[var(--text-secondary)] text-[14px] animate-pulse">Loading files…</div>
+        <div className="text-(--text-secondary) text-[14px] animate-pulse">Loading files…</div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[var(--bg-base)] transition-colors duration-300 relative overflow-hidden">
+    <div className="h-full flex flex-col bg-(--bg-base) transition-colors duration-300 relative overflow-hidden">
       {/* Toolbar */}
-      <div className="px-3 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
-        <h3 className="text-[13px] font-bold uppercase tracking-widest text-[var(--text-secondary)] opacity-60">Files</h3>
+      <div className="px-3 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <h3 className="text-[13px] font-bold uppercase tracking-widest text-(--text-secondary) opacity-60">Files</h3>
         <div className="flex gap-1">
           {[
             { mode: 'simple',   Icon: List,            title: 'Simple view' },
@@ -391,8 +389,8 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
               className={cn(
                 'p-1.5 rounded transition-all',
                 viewMode === mode
-                  ? 'bg-[var(--git-accent)]/15 text-[var(--git-accent)]'
-                  : 'text-[var(--text-secondary)] opacity-40 hover:opacity-80',
+                  ? 'bg-(--git-accent)/15 text-(--git-accent)'
+                  : 'text-(--text-secondary) opacity-40 hover:opacity-80',
               )}
             >
               <Icon className="w-4 h-4" />
@@ -402,11 +400,11 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
       </div>
 
       {viewMode === 'detailed' && files.length > 0 && (
-        <div className="px-3 py-1.5 border-b border-border/50 flex items-center flex-shrink-0">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40" style={{ flex: '5 1 0', paddingLeft: 30 }}>Name</span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 64 }}>Size</span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 88 }}>Modified</span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] opacity-40 flex-shrink-0" style={{ width: 68 }}>Perms</span>
+        <div className="px-3 py-1.5 border-b border-border/50 flex items-center shrink-0">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) opacity-40" style={{ flex: '5 1 0', paddingLeft: 30 }}>Name</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) opacity-40 shrink-0" style={{ width: 64 }}>Size</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) opacity-40 shrink-0" style={{ width: 88 }}>Modified</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) opacity-40 shrink-0" style={{ width: 68 }}>Perms</span>
         </div>
       )}
 
@@ -414,7 +412,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
         {files.length === 0 ? (
           <div className="text-center py-10 px-4">
             <FileIcon filename="folder" isFolder size={48} className="mx-auto mb-3 opacity-30" />
-            <p className="text-[14px] font-semibold text-[var(--text-secondary)] opacity-50">No files found</p>
+            <p className="text-[14px] font-semibold text-(--text-secondary) opacity-50">No files found</p>
           </div>
         ) : (
           <div className="pb-8">

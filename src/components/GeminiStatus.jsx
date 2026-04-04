@@ -48,7 +48,7 @@ function GeminiStatus({ status, onAbort, isLoading }) {
   
   return (
     <div className="w-full mb-6 animate-in slide-in-from-bottom duration-300">
-      <div className="flex items-center justify-between max-w-4xl mx-auto bg-gradient-to-r from-cyan-900 to-blue-900 dark:from-cyan-950 dark:to-blue-950 text-white rounded-lg shadow-lg px-4 py-3">
+      <div className="flex items-center justify-between max-w-4xl mx-auto bg-linear-to-r from-cyan-900 to-blue-900 dark:from-cyan-950 dark:to-blue-950 text-white rounded-lg shadow-lg px-4 py-3">
         <div className="flex-1">
           <div className="flex items-center gap-3">
             {/* Animated spinner */}
@@ -73,7 +73,7 @@ function GeminiStatus({ status, onAbort, isLoading }) {
         {canInterrupt && onAbort && (
           <button
             onClick={onAbort}
-            className="ml-3 text-xs bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md transition-colors flex items-center gap-1.5 flex-shrink-0"
+            className="ml-3 text-xs bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md transition-colors flex items-center gap-1.5 shrink-0"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

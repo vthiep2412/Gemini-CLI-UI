@@ -6,12 +6,10 @@ import os from 'os';
 
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
-let cacheTimestamp = Date.now();
 
 // Clear cache when needed (called when project files change)
 function clearProjectDirectoryCache() {
   projectDirectoryCache.clear();
-  cacheTimestamp = Date.now();
 }
 
 // Load project configuration file
@@ -20,7 +18,7 @@ async function loadProjectConfig() {
   try {
     const configData = await fs.readFile(configPath, 'utf8');
     return JSON.parse(configData);
-  } catch (error) {
+  } catch {
     // Return empty config if file doesn't exist
     return {};
   }
@@ -47,7 +45,7 @@ async function generateDisplayName(projectName, actualProjectDir = null) {
     if (packageJson.name) {
       return packageJson.name;
     }
-  } catch (error) {
+  } catch {
     // Fall back to path-based naming if package.json doesn't exist or can't be read
   }
   
@@ -96,7 +94,7 @@ async function extractProjectDirectory(projectName) {
         extractedPath = Buffer.from(base64Name, 'base64').toString('utf8');
         // Clean the path by removing any non-printable characters
         extractedPath = extractedPath.replace(/[^\x20-\x7E]/g, '').trim();
-      } catch (e) {
+      } catch {
         // If base64 decode fails, use old method
         extractedPath = projectName.replace(/-/g, '/');
       }
@@ -126,7 +124,7 @@ async function extractProjectDirectory(projectName) {
                   latestCwd = entry.cwd;
                 }
               }
-            } catch (parseError) {
+            } catch {
               // Skip malformed lines
             }
           }
@@ -162,7 +160,7 @@ async function extractProjectDirectory(projectName) {
         if (!extractedPath) {
           try {
             extractedPath = latestCwd || Buffer.from(projectName.replace(/_/g, '+').replace(/-/g, '/'), 'base64').toString('utf8');
-          } catch (e) {
+          } catch {
             extractedPath = latestCwd || projectName.replace(/-/g, '/');
           }
         }
@@ -178,7 +176,7 @@ async function extractProjectDirectory(projectName) {
     return extractedPath;
     
   } catch (error) {
-    // console.error(`Error extracting project directory for ${projectName}:`, error);
+    console.error(`Error extracting project directory for ${projectName}:`, error);
     // Fall back to decoded project name
     try {
       // Handle custom padding: __ at the end should be replaced with ==
@@ -189,7 +187,7 @@ async function extractProjectDirectory(projectName) {
       extractedPath = Buffer.from(base64Name, 'base64').toString('utf8');
       // Clean the path by removing any non-printable characters
       extractedPath = extractedPath.replace(/[^\x20-\x7E]/g, '').trim();
-    } catch (e) {
+    } catch {
       extractedPath = projectName.replace(/-/g, '/');
     }
     
@@ -213,7 +211,6 @@ async function getProjects() {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         existingProjects.add(entry.name);
-        const projectPath = path.join(geminiDir, entry.name);
         
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
@@ -246,13 +243,13 @@ async function getProjects() {
             total: allSessions.length
           };
         } catch (e) {
-          // console.warn(`Could not load sessions for project ${entry.name}:`, e.message);
+          console.warn(`Could not load sessions for project ${entry.name}:`, e.message);
         }
         
         projects.push(project);
       }
     }
-  } catch (error) {
+  } catch {
     // console.error('Error reading projects directory:', error);
   }
   
@@ -265,7 +262,7 @@ async function getProjects() {
       if (!actualProjectDir) {
         try {
           actualProjectDir = await extractProjectDirectory(projectName);
-        } catch (error) {
+        } catch {
           // Fall back to decoded project name
           actualProjectDir = projectName.replace(/-/g, '/');
         }
@@ -351,7 +348,7 @@ async function getSessions(projectName, limit = 5, offset = 0) {
       limit
     };
   } catch (error) {
-    // console.error(`Error reading sessions for project ${projectName}:`, error);
+    console.error(`Error reading sessions for project ${projectName}:`, error);
     return { sessions: [], hasMore: false, total: 0 };
   }
 }
@@ -411,14 +408,14 @@ async function parseJsonlSessions(filePath) {
             }
           }
         } catch (parseError) {
-          // console.warn(`[JSONL Parser] Error parsing line ${lineCount}:`, parseError.message);
+          console.warn(`[JSONL Parser] Error parsing line ${lineCount}:`, parseError.message);
         }
       }
     }
     
     // Debug - [JSONL Parser] Processed lines and found sessions
   } catch (error) {
-    // console.error('Error reading JSONL file:', error);
+    console.error('Error reading JSONL file:', error);
   }
   
   // Convert Map to Array and sort by last activity
@@ -458,7 +455,7 @@ async function getSessionMessages(projectName, sessionId) {
               messages.push(entry);
             }
           } catch (parseError) {
-            // console.warn('Error parsing line:', parseError.message);
+            console.warn('Error parsing line:', parseError.message);
           }
         }
       }
@@ -469,7 +466,7 @@ async function getSessionMessages(projectName, sessionId) {
       new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
     );
   } catch (error) {
-    // console.error(`Error reading messages for session ${sessionId}:`, error);
+    console.error(`Error reading messages for session ${sessionId}:`, error);
     return [];
   }
 }
@@ -496,52 +493,51 @@ async function renameProject(projectName, newDisplayName) {
 async function deleteSession(projectName, sessionId) {
   const projectDir = path.join(os.homedir(), '.gemini', 'projects', projectName);
   
-  try {
-    const files = await fs.readdir(projectDir);
-    const jsonlFiles = files.filter(file => file.endsWith('.jsonl'));
+  const files = await fs.readdir(projectDir);
+  const jsonlFiles = files.filter(file => file.endsWith('.jsonl'));
+  
+  if (jsonlFiles.length === 0) {
+    throw new Error('No session files found for this project');
+  }
+  
+  // Check all JSONL files to find which one contains the session
+  for (const file of jsonlFiles) {
+    const jsonlFile = path.join(projectDir, file);
+    const content = await fs.readFile(jsonlFile, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
     
-    if (jsonlFiles.length === 0) {
-      throw new Error('No session files found for this project');
-    }
+    // Check if this file contains the session
+    const hasSession = lines.some(line => {
+      try {
+        const data = JSON.parse(line);
+        return data.sessionId === sessionId;
+      } catch {
+        return false;
+      }
+    });
     
-    // Check all JSONL files to find which one contains the session
-    for (const file of jsonlFiles) {
-      const jsonlFile = path.join(projectDir, file);
-      const content = await fs.readFile(jsonlFile, 'utf8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      // Check if this file contains the session
-      const hasSession = lines.some(line => {
+    if (hasSession) {
+      // Filter out all entries for this session
+      const filteredLines = lines.filter(line => {
         try {
           const data = JSON.parse(line);
-          return data.sessionId === sessionId;
+          return data.sessionId !== sessionId;
         } catch {
-          return false;
+          return true; // Keep malformed lines
         }
       });
       
-      if (hasSession) {
-        // Filter out all entries for this session
-        const filteredLines = lines.filter(line => {
-          try {
-            const data = JSON.parse(line);
-            return data.sessionId !== sessionId;
-          } catch {
-            return true; // Keep malformed lines
-          }
-        });
-        
-        // Write back the filtered content
-        await fs.writeFile(jsonlFile, filteredLines.join('\n') + (filteredLines.length > 0 ? '\n' : ''));
-        return true;
+      // Write back the filtered content or delete if empty
+      if (filteredLines.length > 0) {
+        await fs.writeFile(jsonlFile, filteredLines.join('\n') + '\n');
+      } else {
+        await fs.unlink(jsonlFile);
       }
+      return true;
     }
-    
-    throw new Error(`Session ${sessionId} not found in any files`);
-  } catch (error) {
-    // console.error(`Error deleting session ${sessionId} from project ${projectName}:`, error);
-    throw error;
   }
+  
+  throw new Error(`Session ${sessionId} not found in any files`);
 }
 
 // Check if a project is empty (has no sessions)
@@ -550,7 +546,7 @@ async function isProjectEmpty(projectName) {
     const sessionsResult = await getSessions(projectName, 1, 0);
     return sessionsResult.total === 0;
   } catch (error) {
-    // console.error(`Error checking if project ${projectName} is empty:`, error);
+    console.error(`Error checking if project ${projectName} is empty:`, error);
     return false;
   }
 }
@@ -559,26 +555,21 @@ async function isProjectEmpty(projectName) {
 async function deleteProject(projectName) {
   const projectDir = path.join(os.homedir(), '.gemini', 'projects', projectName);
   
-  try {
-    // First check if the project is empty
-    const isEmpty = await isProjectEmpty(projectName);
-    if (!isEmpty) {
-      throw new Error('Cannot delete project with existing sessions');
-    }
-    
-    // Remove the project directory
-    await fs.rm(projectDir, { recursive: true, force: true });
-    
-    // Remove from project config
-    const config = await loadProjectConfig();
-    delete config[projectName];
-    await saveProjectConfig(config);
-    
-    return true;
-  } catch (error) {
-    // console.error(`Error deleting project ${projectName}:`, error);
-    throw error;
+  // First check if the project is empty
+  const isEmpty = await isProjectEmpty(projectName);
+  if (!isEmpty) {
+    throw new Error('Cannot delete project with existing sessions');
   }
+  
+  // Remove the project directory
+  await fs.rm(projectDir, { recursive: true, force: true });
+  
+  // Remove from project config
+  const config = await loadProjectConfig();
+  delete config[projectName];
+  await saveProjectConfig(config);
+  
+  return true;
 }
 
 // Add a project manually to the config (create folder if needed)
@@ -595,10 +586,10 @@ async function addProjectManually(projectPath, displayName = null) {
         await fs.mkdir(absolutePath, { recursive: true });
         console.log(`Created new directory: ${absolutePath}`);
       } catch (mkdirError) {
-        throw new Error(`Failed to create directory: ${absolutePath} - ${mkdirError.message}`);
+        throw new Error(`Failed to create directory: ${absolutePath} - ${mkdirError.message}`, { cause: mkdirError });
       }
     } else {
-      throw new Error(`Cannot access path: ${absolutePath} - ${error.message}`);
+      throw new Error(`Cannot access path: ${absolutePath} - ${error.message}`, { cause: error });
     }
   }
   
@@ -639,7 +630,7 @@ async function addProjectManually(projectPath, displayName = null) {
   try {
     await fs.mkdir(projectDir, { recursive: true });
   } catch (error) {
-    // console.error('Error creating project directory:', error);
+    console.error('Error creating project directory:', error);
   }
   
   return {

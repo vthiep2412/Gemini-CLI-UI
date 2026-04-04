@@ -4,9 +4,15 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 
-import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronRight, ChevronDown, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
+import {
+  Folder, FolderOpen, FolderPlus,
+  Plus, Search, RefreshCw, Settings,
+  ChevronRight, ChevronDown,
+  MessageSquare, Clock, Star,
+  Edit2, Edit3, Check, X, Trash2
+} from 'lucide-react';
 import { cn } from '../lib/utils';
-import GeminiLogo from './GeminiLogo';
+// import GeminiLogo from './GeminiLogo';
 import { api } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCurrentTime } from '../hooks/useCurrentTime';
@@ -55,13 +61,13 @@ function Sidebar({
   onSessionSelect, 
   onNewSession,
   onSessionDelete,
+  onSessionUpdate,
   onProjectDelete,
   isLoading,
   onRefresh,
   onShowSettings,
   updateAvailable,
   latestVersion,
-  currentVersion,
   onShowVersionModal
 }) {
   const [expandedProjectName, setExpandedProjectName] = useState(null);
@@ -77,7 +83,7 @@ function Sidebar({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [editingSessionName, setEditingSessionName] = useState('');
-  const [generatingSummary, setGeneratingSummary] = useState({});
+  // const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
 
   
@@ -345,7 +351,6 @@ function Sidebar({
       const response = await api.createProject(newProjectPath.trim());
 
       if (response.ok) {
-        const result = await response.json();
         setShowNewProject(false);
         setNewProjectPath('');
         
@@ -528,7 +533,7 @@ function Sidebar({
               />
               {newProjectPath.trim() && (
                 <div className="text-xs text-muted-foreground italic">
-                  💡 Folder will be created if it doesn't exist
+                  💡 Folder will be created if it doesn&apos;t exist
                 </div>
               )}
             </div>
@@ -589,7 +594,7 @@ function Sidebar({
                   />
                   {newProjectPath.trim() && (
                     <div className="text-xs text-muted-foreground italic mt-2">
-                      💡 Folder will be created if it doesn't exist
+                      💡 Folder will be created if it doesn&apos;t exist
                     </div>
                   )}
                 </div>
@@ -859,9 +864,9 @@ function Sidebar({
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         {isExpanded ? (
-                          <FolderOpen className="w-4 h-4 text-primary flex-shrink-0" />
+                          <FolderOpen className="w-4 h-4 text-primary shrink-0" />
                         ) : (
-                          <Folder className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <Folder className="w-4 h-4 text-muted-foreground shrink-0" />
                         )}
                         <div className="min-w-0 flex-1 text-left">
                           {editingProject === project.name ? (
@@ -904,7 +909,7 @@ function Sidebar({
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         {editingProject === project.name ? (
                           <>
                             <div
@@ -1041,7 +1046,7 @@ function Sidebar({
                               >
                                 <div className="flex items-center gap-2">
                                   <div className={cn(
-                                    "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0",
+                                    "w-5 h-5 rounded-md flex items-center justify-center shrink-0",
                                     selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
                                   )}>
                                     <MessageSquare className={cn(
@@ -1092,7 +1097,7 @@ function Sidebar({
                                 onTouchEnd={handleTouchClick(() => onSessionSelect(session))}
                               >
                                 <div className="flex items-start gap-2 min-w-0 w-full">
-                                  <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                  <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
                                   <div className="min-w-0 flex-1">
                                     <div className="text-xs font-medium truncate text-foreground">
                                       {session.summary || 'New Session'}
@@ -1122,7 +1127,7 @@ function Sidebar({
                                       onKeyDown={(e) => {
                                         e.stopPropagation();
                                         if (e.key === 'Enter') {
-                                          updateSessionSummary(project.name, session.id, editingSessionName);
+                                          onSessionUpdate(project.name, session.id, editingSessionName);
                                         } else if (e.key === 'Escape') {
                                           setEditingSession(null);
                                           setEditingSessionName('');
@@ -1136,7 +1141,7 @@ function Sidebar({
                                       className="w-6 h-6 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded flex items-center justify-center"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        updateSessionSummary(project.name, session.id, editingSessionName);
+                                        onSessionUpdate(project.name, session.id, editingSessionName);
                                       }}
                                       title="Save"
                                     >
@@ -1264,7 +1269,7 @@ function Sidebar({
       
       {/* Version Update Notification */}
       {updateAvailable && (
-        <div className="md:p-2 border-t border-border/50 flex-shrink-0">
+        <div className="md:p-2 border-t border-border/50 shrink-0">
           {/* Desktop Version Notification */}
           <div className="hidden md:block">
             <Button
@@ -1307,11 +1312,11 @@ function Sidebar({
       )}
       
       {/* Settings Section */}
-      <div className="md:p-2 md:border-t md:border-border flex-shrink-0">
+      <div className="md:p-2 md:border-t md:border-border shrink-0">
           {/* Mobile Settings */}
           <div className="md:hidden p-4 border-t border-border/50">
             <button
-              className="w-full h-14 bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/40 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-all duration-300 shadow-sm border border-border"
+              className="w-full h-14 bg-muted/40 hover:bg-muted/60 dark:bg-muted/20 dark:hover:bg-muted/40 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-[background-color,transform] duration-300 shadow-sm border border-border"
               onClick={onShowSettings}
               onTouchEnd={handleTouchClick(onShowSettings)}
             >

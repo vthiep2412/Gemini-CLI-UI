@@ -86,7 +86,7 @@ export default function LeftPane() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--bg-base)] border-r border-border overflow-hidden" ref={containerRef}>
+    <div className="flex flex-col h-full bg-(--bg-base) border-r border-border overflow-hidden" ref={containerRef}>
       <BranchBar />
       <div className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
         {selectedCommit ? (
@@ -98,13 +98,16 @@ export default function LeftPane() {
             </div>
             <div 
               className={`absolute left-0 right-0 z-20 border-t border-border flex flex-col transition-all duration-300
-                ${isMobile ? 'bottom-[80px] mx-4 rounded-2xl border shadow-2xl' : 'bottom-0'}
-                ${isDarkMode ? 'bg-[var(--bg-base)]/95 backdrop-blur-md' : 'bg-white/98 backdrop-blur-sm shadow-[0_-4px_12px_rgba(0,0,0,0.03)]'}`}
+                ${isMobile ? 'bottom-20 mx-4 rounded-2xl border shadow-2xl' : 'bottom-0'}
+                ${isDarkMode ? 'bg-(--bg-base)/95 backdrop-blur-md' : 'bg-white/98 backdrop-blur-sm shadow-[0_-4px_12px_rgba(0,0,0,0.03)]'}`}
               style={{ height: commitHeight }}
             >
               {/* Resize Handle at the top of the absolute div */}
               <div 
-                className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-30 flex items-center justify-center group outline-none focus-visible:ring-2 focus-visible:ring-[var(--git-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-base)]"
+                className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-30 flex 
+                items-center justify-center group outline-none focus-visible:ring-2 
+                focus-visible:ring-(--git-accent) focus-visible:ring-offset-1 
+                focus-visible:ring-offset-(--bg-base)"
                 onMouseDown={startResizing}
                 role="separator"
                 aria-orientation="horizontal"
@@ -115,7 +118,7 @@ export default function LeftPane() {
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
               >
-                <div className="w-12 h-1 rounded-full bg-border/40 group-hover:bg-[var(--git-accent)]/50 transition-colors" />
+                <div className="w-12 h-1 rounded-full bg-border/40 group-hover:bg-(--git-accent)/50 transition-colors" />
               </div>
               
               <CommitInput />

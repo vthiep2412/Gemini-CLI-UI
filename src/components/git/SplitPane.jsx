@@ -10,7 +10,6 @@ import Tooltip from '../common/Tooltip';
 const STORAGE_KEY = 'git-split-ratio';
 const DEFAULT_RATIO = 0.38; // 38% left
 const MIN_LEFT_PX = 260;
-const MIN_LEFT_RATIO = 0.1;
 const MAX_LEFT_RATIO = 0.58;
 
 export default function SplitPane({ left, right, className = '' }) {
@@ -63,8 +62,9 @@ export default function SplitPane({ left, right, className = '' }) {
       setRatio(newRatio);
       try {
         localStorage.setItem(STORAGE_KEY, String(newRatio));
-      } catch (e) {
-        // Ignore quota/private-mode errors
+      } catch (err) {
+        // Log quota/private-mode errors but continue gracefully
+        console.warn('Failed to write split ratio to localStorage:', err);
       }
     });
   }, []);
@@ -106,7 +106,7 @@ export default function SplitPane({ left, right, className = '' }) {
             position: 'relative',
             height: '100%'
           }}
-          className="hover:opacity-40 hover:bg-[var(--git-accent)] active:bg-[var(--git-accent)] active:opacity-100 group transition-all"
+          className="hover:opacity-40 hover:bg-(--git-accent) active:bg-(--git-accent) active:opacity-100 group transition-all"
         >
           {/* Invisible hit area for easier grabbing */}
           <div className="absolute inset-y-0 -left-1.5 -right-1.5 cursor-ew-resize" />

@@ -16,7 +16,7 @@ export default function DynamicSyntaxHighlighter({ language, code, isDarkMode, s
           setHighlighter(() => prism.PrismLight || prism.Prism);
         }
       } catch (err) {
-        // ignore
+        console.warn('[SyntaxHighlighter] Failed to load core highlighter:', err);
       }
     })();
     return () => { mounted = false; };

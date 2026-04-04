@@ -6,6 +6,8 @@ import FileTree from './FileTree';
 import { api } from '../utils/api';
 import { cn } from '../lib/utils';
 import FileIcon from './common/FileIcon';
+import { getLanguage } from '../utils/languages';
+import { deepDarkTheme } from '../utils/theme';
 
 function IDETab({ selectedProject, isMobile, openFileFromChat }) {
   const [openFiles, setOpenFiles] = useState([]);
@@ -81,8 +83,6 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
 
     return () => observer.disconnect();
   }, []);
-
-  // Removed from here and moved above useEffect to fix ReferenceError.
 
   const handleCloseFile = (e, fileToClose) => {
     e.stopPropagation(); // Prevent tab click from firing
@@ -175,40 +175,124 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []); // Empty deps, uses refs inside
 
-  const getLanguage = (filename) => {
-    const lower = filename?.toLowerCase() || '';
-    if (lower.startsWith('.env')) return 'ini';
-    if (lower === '.gitignore' || lower === '.npmignore') return 'shell';
-
-    const ext = filename?.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'js': case 'jsx': return 'javascript';
-      case 'ts': case 'tsx': return 'typescript';
-      case 'py': return 'python';
-      case 'html': case 'htm': return 'html';
-      case 'css': case 'scss': case 'less': return 'css';
-      case 'json': return 'json';
-      case 'md': case 'markdown': return 'markdown';
-      case 'yml': case 'yaml': return 'yaml';
-      case 'java': return 'java';
-      case 'cpp': case 'c': return 'cpp';
-      case 'rs': return 'rust';
-      case 'go': return 'go';
-      case 'php': return 'php';
-      case 'rb': return 'ruby';
-      default: return 'plaintext';
-    }
-  };
-
   const handleBeforeMount = (monaco) => {
-    monaco.editor.defineTheme('deep-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [{ token: '', background: '0a0f1e' }],
-      colors: {
-        'editor.background': '#0a0f1e',
-      }
+    // Register .cjs and .mjs for JavaScript
+    monaco.languages.register({ id: 'javascript', extensions: ['.js', '.jsx', '.cjs', '.mjs'] });
+    monaco.languages.register({ id: 'typescript', extensions: ['.ts', '.tsx', '.mts', '.cts'] });
+
+    // Specialize JavaScript/TypeScript tokenization to match VS Code "Pink" keywords and "Yellow" functions
+    ['javascript', 'typescript'].forEach(langId => {
+      // Note: We use a custom provider that distinguishes control keywords
+      const controlKeywords = [
+        'break', 'case', 'catch', 'continue', 'debugger', 'default', 'do', 'else',
+        'finally', 'for', 'if', 'return', 'switch', 'throw', 'try', 'while', 'async', 'await'
+      ];
+      
+      const otherKeywords = [
+        'class', 'const', 'constructor', 'delete', 'export', 'extends', 'false',
+        'from', 'function', 'get', 'import', 'in', 'instanceof', 'let', 'new',
+        'null', 'set', 'static', 'super', 'symbol', 'this', 'true', 'typeof',
+        'undefined', 'var', 'void', 'with', 'yield', 'of'
+      ];
+
+      monaco.languages.setMonarchTokensProvider(langId, {
+        keywords: otherKeywords,
+        controlKeywords: controlKeywords,
+        
+        // Standard Monaco JS/TS tokenizer adjusted for granular keywords
+        tokenizer: {
+          root: [
+            // Member expressions / Function calls (The Yellow functions)
+            [/[a-zA-Z_$][\w$]*(?=\s*\()/, 'function'],
+
+            // Identifiers and keywords
+            [/[a-z_$][\w$]*/, {
+              cases: {
+                '@controlKeywords': 'keyword.control',
+                '@keywords': 'keyword',
+                '@default': 'identifier'
+              }
+            }],
+            
+            // Common whitespace/comments
+            { include: '@whitespace' },
+            
+            // Delimiters
+            [/[{}()[\]]/, '@brackets'],
+            [/[<>](?!@symbols)/, '@brackets'],
+            [/@symbols/, {
+              cases: {
+                '@default': 'operator'
+              }
+            }],
+            
+            // Numbers
+            [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
+            [/0[xX][0-9a-fA-F]+/, 'number.hex'],
+            [/\d+/, 'number'],
+            
+            // Strings
+            [/"([^"\\]|\\.)*$/, 'string.invalid'],
+            [/'([^'\\]|\\.)*$/, 'string.invalid'],
+            [/"/, 'string', '@string_double'],
+            [/'/, 'string', '@string_single'],
+            [/`/, 'string', '@string_backtick'],
+          ],
+          
+          whitespace: [
+            [/[ \t\r\n]+/, ''],
+            [/\/\*\*/, 'comment.doc', '@jsdoc'],
+            [/\/\*/, 'comment', '@comment'],
+            [/\/\/.*$/, 'comment'],
+          ],
+          
+          comment: [
+            [/[^/*]+/, 'comment'],
+            [/\*\//, 'comment', '@pop'],
+            [/[/*]/, 'comment']
+          ],
+          
+          jsdoc: [
+            [/[^/*]+/, 'comment.doc'],
+            [/\*\//, 'comment.doc', '@pop'],
+            [/[/*]/, 'comment.doc']
+          ],
+          
+          string_double: [
+            [/[^\\"]+/, 'string'],
+            [/@escapes/, 'string.escape'],
+            [/\\./, 'string.escape.invalid'],
+            [/"/, 'string', '@pop']
+          ],
+          
+          string_single: [
+            [/[^\\']+/, 'string'],
+            [/@escapes/, 'string.escape'],
+            [/\\./, 'string.escape.invalid'],
+            [/'/, 'string', '@pop']
+          ],
+          
+          string_backtick: [
+            [/\$\{/, { token: 'delimiter.bracket', next: '@bracketCounting' }],
+            [/[^\\`$]+/, 'string'],
+            [/@escapes/, 'string.escape'],
+            [/\\./, 'string.escape.invalid'],
+            [/`/, 'string', '@pop']
+          ],
+          
+          bracketCounting: [
+            [/\{/, 'delimiter.bracket', '@push'],
+            [/\}/, 'delimiter.bracket', '@pop'],
+            { include: 'root' }
+          ],
+        },
+        
+        symbols: /[=><!~?:&|+\-* /^%]+/,
+        escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+      });
     });
+
+    monaco.editor.defineTheme('deep-dark', deepDarkTheme);
   };
 
   const handlePointerMove = useCallback((e) => {
@@ -303,7 +387,7 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
                         size={20} 
                         className="opacity-90"
                       />
-                      <span className={cn('truncate max-w-[180px]', isDirty && 'italic font-medium')}>
+                      <span className={cn('truncate max-w-45', isDirty && 'italic font-medium')}>
                         {file.name}
                       </span>
                       
@@ -375,6 +459,14 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
                       padding: { top: 16 },
                       scrollBeyondLastLine: false,
                       tabSize: 2,
+                      cursorBlinking: 'smooth',
+                      cursorSmoothCaretAnimation: 'on',
+                      bracketPairColorization: { enabled: true },
+                      'semanticHighlighting.enabled': true,
+                      unicodeHighlight: { ambiguousCharacters: false },
+                      fontLigatures: false, // User prefers separate stripes for ===
+                      fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace",
+                      renderLineHighlight: 'all',
                     }}
                     loading={<div className="h-full w-full flex items-center justify-center">Loading editor...</div>}
                   />

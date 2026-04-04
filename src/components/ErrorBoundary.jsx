@@ -7,7 +7,7 @@ class ErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -42,6 +42,30 @@ class ErrorBoundary extends React.Component {
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 An unexpected error occurred. Please refresh the page to try again.
               </p>
+              
+              {process.env.NODE_ENV === 'development' && this.state.error && (() => {
+                const error = this.state.error;
+                const isErrorObject = error instanceof Error || (typeof error === 'object' && error !== null && 'message' in error);
+                const displayName = isErrorObject ? (error.name || 'Error') : `<${typeof error}>`;
+                const displayMessage = isErrorObject ? error.message : String(error);
+                const stack = isErrorObject ? error.stack : null;
+
+                return (
+                  <div className="mt-6 text-left">
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-md p-3 overflow-hidden">
+                      <p className="text-sm font-bold text-red-800 dark:text-red-200 mb-1">
+                        {displayName}: {displayMessage}
+                      </p>
+                      {stack && (
+                        <pre className="text-xs text-red-700 dark:text-red-300 overflow-x-auto whitespace-pre font-mono max-h-60 opacity-80 mt-2">
+                          {stack}
+                        </pre>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <button
                 onClick={() => window.location.reload()}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"

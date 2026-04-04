@@ -38,9 +38,10 @@ export default function FileIcon({ filename = '', isFolder = false, isOpen = fal
 
   return (
     <span
-      className={`inline-flex flex-shrink-0 items-center justify-center [&>svg]:w-full [&>svg]:h-full ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center [&>svg]:w-full [&>svg]:h-full ${className}`}
       style={{ width: size, height: size }}
       aria-hidden="true"
+      // SVG sourced from material-file-icons library (trusted)
       dangerouslySetInnerHTML={{ __html: iconMarkup?.svg || '' }}
     />
   );

@@ -151,3 +151,4 @@ bun.lock
 
 dev.log
 dev.pid
+eslint_report.json

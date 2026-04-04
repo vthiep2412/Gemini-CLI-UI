@@ -222,7 +222,7 @@ export function MicButton({ onTranscript, className = '' }) {
     }
   };
 
-  const { icon, className: buttonClass, disabled } = getButtonAppearance();
+  const { icon, className: buttonClasses, disabled } = getButtonAppearance();
 
   return (
     <div className="relative">
@@ -241,9 +241,7 @@ export function MicButton({ onTranscript, className = '' }) {
           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
           dark:ring-offset-gray-800
           touch-action-manipulation
-          ${disabled ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}
-          ${state === 'recording' ? 'animate-pulse' : ''}
-          hover:opacity-90
+          ${buttonClasses}
           ${className}
         `}
         onClick={handleClick}

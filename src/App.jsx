@@ -28,7 +28,6 @@ import ErrorBoundary from './components/ErrorBoundary';
 import FloatingNav from './components/FloatingNav';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { useWebSocket } from './utils/websocket';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -75,6 +74,7 @@ function AppContent() {
   // Refs for throttled resize handler (Task 8)
   const latestClientXRef = useRef(null);
   const rafIdRef = useRef(null);
+  const resizeTimerRef = useRef(null);
   
   // Session Protection System: Track sessions with active conversations to prevent
   // automatic project updates from interrupting ongoing chats. When a user sends
@@ -108,7 +108,7 @@ function AppContent() {
     }
   }, [isMobile]);
   
-  const { ws, sendMessage, messages, lastSystemMessage } = useMessages();
+  const { ws, lastSystemMessage } = useMessages();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -199,7 +199,6 @@ function AppContent() {
     const timer = setTimeout(checkNavCollapse, 100);
     return () => clearTimeout(timer);
   }, [selectedSession?.summary, activeTab, selectedProject?.displayName, sidebarWidth, checkNavCollapse]);
-  const resizeTimerRef = useRef(null);
 
   // Also hook into window resize
   useEffect(() => {
@@ -453,6 +452,21 @@ function AppContent() {
     );
   };
 
+  const handleSessionUpdate = async (projectName, sessionId, summary) => {
+    try {
+      const res = await api.updateSessionSummary(projectName, sessionId, summary);
+      if (res.ok) {
+        // Refresh projects to update session list and persist change
+        await fetchProjects();
+      } else {
+        const error = await res.json();
+        console.error('Failed to update session summary:', error.error);
+      }
+    } catch (error) {
+      console.error('Error updating session summary:', error);
+    }
+  };
+
 
 
   const handleSidebarRefresh = async () => {
@@ -651,7 +665,7 @@ function AppContent() {
       {/* Fixed Desktop Sidebar */}
       {!isMobile && (
         <div 
-          className="flex-shrink-0 bg-card relative"
+          className="shrink-0 bg-card relative"
           style={{ width: `${sidebarWidth}px` }}
         >
           <div className="h-full overflow-hidden">
@@ -663,6 +677,7 @@ function AppContent() {
               onSessionSelect={handleSessionSelect}
               onNewSession={handleNewSession}
               onSessionDelete={handleSessionDelete}
+              onSessionUpdate={handleSessionUpdate}
               onProjectDelete={handleProjectDelete}
               isLoading={isLoadingProjects}
               onRefresh={handleSidebarRefresh}
@@ -676,7 +691,8 @@ function AppContent() {
           </div>
           <div 
             onMouseDown={startResizing}
-            className={`absolute top-0 right-[-3px] bottom-0 w-1.5 cursor-ew-resize transition-colors z-50 ${
+            // AGAIN tailwind v4
+            className={`absolute top-0 -right-0.75 bottom-0 w-1.5 cursor-ew-resize transition-colors z-50 ${
               isResizing ? 'bg-primary' : 'hover:bg-primary/20'
             } group-hover:block transition-all duration-300`}
             title="Drag to resize sidebar"
@@ -687,7 +703,8 @@ function AppContent() {
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isMobile && sidebarOpen && (
-          <div className="fixed inset-0 z-[60] flex overflow-hidden">
+          // tailwind v4, z-60 is valid
+          <div className="fixed inset-0 z-60 flex overflow-hidden">
             {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
@@ -715,6 +732,7 @@ function AppContent() {
                 onSessionSelect={handleSessionSelect}
                 onNewSession={handleNewSession}
                 onSessionDelete={handleSessionDelete}
+                onSessionUpdate={handleSessionUpdate}
                 onProjectDelete={handleProjectDelete}
                 isLoading={isLoadingProjects}
                 onRefresh={handleSidebarRefresh}
@@ -733,7 +751,7 @@ function AppContent() {
       {/* Main Content Area - Flexible */}
       <div className="flex-1 flex flex-col min-w-0 relative border-l border-border">
         {/* Persistent Top Bar (Header) */}
-        <header className="h-16 bg-white/95 dark:bg-[#030711]/95 backdrop-blur-xl border-b border-border flex-shrink-0 z-30 relative shadow-sm">
+        <header className="h-16 bg-white/95 dark:bg-[#030711]/95 backdrop-blur-xl border-b border-border shrink-0 z-30 relative shadow-sm">
           <div className="h-full px-4 flex items-center justify-between w-full relative">
             {/* Left side: Project Info */}
             <div ref={titleRef} className="flex items-center space-x-2 sm:space-x-3 min-w-0 z-10">
@@ -809,6 +827,7 @@ function AppContent() {
           isMobile={isMobile}
           onMenuClick={() => setSidebarOpen(true)}
           isLoading={isLoadingProjects}
+          isInputFocused={isInputFocused}
           onInputFocusChange={setIsInputFocused}
           onSessionActive={markSessionAsActive}
           onSessionInactive={markSessionAsInactive}
@@ -823,7 +842,7 @@ function AppContent() {
       </div>
 
       {/* Mobile Floating Navigation at Bottom */}
-      {isMobile && (
+      {isMobile && !isInputFocused && (
         <div className="fixed bottom-6 left-0 right-0 z-40 flex justify-center pointer-events-none px-4">
           <div className="pointer-events-auto max-w-full">
             <FloatingNav

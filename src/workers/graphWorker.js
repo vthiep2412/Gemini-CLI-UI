@@ -24,8 +24,11 @@ function computeLanes(commits) {
   // Track which commit is currently occupying each lane (the 'tip' of a reserved path)
   const activeLanes = [];
   
-  const layout = commits.map((commit, idx) => {
+  const layout = commits.map((commit) => {
     const { hash, parents = [] } = commit;
+    if (!hash) {
+      throw new TypeError('Commit missing required hash property');
+    }
     
     let lane;
     if (hashToLane[hash] !== undefined) {

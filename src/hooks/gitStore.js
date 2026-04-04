@@ -129,7 +129,7 @@ export const useGitStore = create((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
       set({ remoteStatus: data.error ? null : data });
-    } catch (_) {}
+    } catch (e) { console.warn("fetchGraph failed:", e); }
   },
 
   fetchFileDiff: async (filePath, signal) => {
@@ -175,7 +175,7 @@ export const useGitStore = create((set, get) => ({
         // Dispatch to Web Worker for layout
         get()._dispatchToWorker(combined);
       }
-    } catch (_) {}
+    } catch (e) { console.warn("fetchRemoteStatus failed:", e); }
     finally { setLoading('loadingGraph', false); }
   },
 
@@ -220,7 +220,11 @@ export const useGitStore = create((set, get) => ({
   toggleFileStaged: (filePath) =>
     set(s => {
       const next = new Set(s.stagedFiles);
-      next.has(filePath) ? next.delete(filePath) : next.add(filePath);
+      if (next.has(filePath)) {
+        next.delete(filePath);
+      } else {
+        next.add(filePath);
+      }
       return { stagedFiles: next };
     }),
 
@@ -363,7 +367,8 @@ export const useGitStore = create((set, get) => ({
         try {
           const errData = await res.json();
           if (errData.error) errMsg = errData.error;
-        } catch (_) {}
+        } catch (e) { console.warn("Failed to parse error response:", e); }
+
         throw new Error(errMsg);
       }
       const data = await res.json();
