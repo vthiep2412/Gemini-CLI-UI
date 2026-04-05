@@ -9,6 +9,7 @@ export const getLanguage = (filename) => {
   // Specific filename prefix/match cases
   if (lower.startsWith('.env')) return 'ini';
   if (lower === '.gitignore' || lower === '.npmignore') return 'shell';
+  if (lower === '.dockerignore') return 'shell';
   if (lower === 'dockerfile') return 'dockerfile';
   if (lower === 'makefile') return 'makefile';
 
@@ -28,6 +29,7 @@ export const getLanguage = (filename) => {
     case 'sql': return 'sql';
     case 'sh': case 'bash': return 'shell';
     case 'toml': return 'toml';
+    case 'ini': case 'env': return 'ini';
     case 'xml': case 'svg': return 'xml';
     case 'java': return 'java';
     case 'cpp': return 'cpp';

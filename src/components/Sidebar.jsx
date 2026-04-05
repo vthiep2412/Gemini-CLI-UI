@@ -1161,22 +1161,6 @@ function Sidebar({
                                   </>
                                 ) : (
                                   <>
-                                    {/* Generate summary button */}
-                                    {/* <button
-                                      className="w-6 h-6 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded flex items-center justify-center"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        generateSessionSummary(project.name, session.id);
-                                      }}
-                                      title="Generate AI summary for this session"
-                                      disabled={generatingSummary[`${project.name}-${session.id}`]}
-                                    >
-                                      {generatingSummary[`${project.name}-${session.id}`] ? (
-                                        <div className="w-3 h-3 animate-spin rounded-full border border-blue-600 dark:border-blue-400 border-t-transparent" />
-                                      ) : (
-                                        <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                                      )}
-                                    </button> */}
                                     {/* Edit button */}
                                     <button
                                       className="w-6 h-6 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded flex items-center justify-center"

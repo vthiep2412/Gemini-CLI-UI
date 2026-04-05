@@ -116,9 +116,8 @@ const detectShells = async () => {
     ];
     for (const shell of unixShells) {
       try {
-        if (fs.existsSync(shell.path)) {
-          shells.push(shell);
-        }
+        await fsPromises.access(shell.path);
+        shells.push(shell);
       } catch (err) { console.warn('Caught suppressed error:', err.message); }
     }
   }
@@ -482,7 +481,8 @@ app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, re
 // Get messages for a specific session
 app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateToken, async (req, res) => {
   try {
-    const { sessionId } = req.params;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { sessionId, projectName: _projectName /* intentionally unused on purpose */ } = req.params;
     const messages = sessionManager.getSessionMessages(sessionId);
     res.json({ messages });
   } catch (error) {
@@ -511,7 +511,7 @@ app.put('/api/projects/:projectName/sessions/:sessionId/summary', authenticateTo
       return res.status(400).json({ error: 'Summary is required' });
     }
     
-    const success = sessionManager.updateSessionSummary(sessionId, summary);
+    const success = await sessionManager.updateSessionSummary(sessionId, summary);
     res.json({ success });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -640,8 +640,8 @@ app.get('/api/projects/:projectName/files/content', authenticateToken, async (re
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
     
-    fileStream.on('error', () => {
-      // console.error('Error streaming file:', error);
+    fileStream.on('error', (streamErr) => {
+      console.error('Error streaming file:', streamErr.message);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Error reading file' });
       }
@@ -950,7 +950,7 @@ function handleShellConnection(ws) {
               } else {
                 shellProcess.kill();
               }
-            } catch (e) {console.warn("Caught suppressed error:", e);}
+            } catch (e) {console.warn("Caught suppressed error:", e.message);}
           }
           
           let shellArgs = [];
@@ -1052,7 +1052,7 @@ function handleShellConnection(ws) {
         if (shellProcess && shellProcess.write) {
           try {
             shellProcess.write(data.data);
-          } catch (e) {console.warn("Caught suppressed error:", e);}
+          } catch (e) {console.warn("Caught suppressed error:", e.message);}
         }
       } else if (data.type === 'resize') {
         if (shellProcess && shellProcess.resize) {
@@ -1079,7 +1079,7 @@ function handleShellConnection(ws) {
         } else {
           shellProcess.kill();
         }
-      } catch (e) {console.warn("Caught suppressed error:", e);}
+      } catch (e) {console.warn("Caught suppressed error:", e.message);}
       shellProcess = null;
     }
   });
@@ -1309,8 +1309,8 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
         );
         
         res.json({ images: processedImages });
-      } catch {
-        // console.error('Error processing images:', error);
+      } catch (processingError) {
+        console.error('Error processing images:', processingError.message);
         // Clean up any remaining files
         await Promise.all(req.files.map(f => fs.unlink(f.path).catch(() => {})));
         res.status(500).json({ error: 'Failed to process images' });
@@ -1446,7 +1446,7 @@ async function handleShutdown(signal) {
           await watcher.close();
         }
       } catch (e) {
-        console.debug(`[Shutdown] Error closing watcher for ${projectPath}:`, e);
+        console.debug(`[Shutdown] Error closing watcher for ${projectPath}:`, e.message);
       }
     })());
   }

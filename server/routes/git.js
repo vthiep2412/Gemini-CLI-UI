@@ -397,7 +397,7 @@ router.get('/commit-diff', async (req, res) => {
         const statusRaw = parts[0];
         const status = statusRaw[0]; // Take primary status character
         let filePath = parts[parts.length - 1]; // Usually the last part
-        let oldPath = status === 'R' ? parts[1] : null;
+        let oldPath = (status === 'R' || status === 'C') && parts.length >= 3 ? parts[1] : null;
 
         if (!filesMap.has(filePath)) {
           filesMap.set(filePath, { filePath, status, oldPath, adds: 0, dels: 0 });
@@ -575,26 +575,46 @@ router.post('/generate-commit-message', async (req, res) => {
     });
 
     await new Promise((resolve, reject) => {
+      let isSettled = false;
+      const TIMEOUT_MS = 45000;
+
+      const cleanupAndReject = (err) => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(timeout);
+        try { gitProcess.kill(); } catch { /* ignore */ }
+        try { geminiProcess.kill(); } catch { /* ignore */ }
+        reject(err);
+      };
+
+      const timeout = setTimeout(() => {
+        cleanupAndReject(new Error('Commit message generation timed out'));
+      }, TIMEOUT_MS);
+
       gitProcess.on('error', (err) => {
-        reject(new Error(`Failed to start git: ${err.message}`));
+        cleanupAndReject(new Error(`Failed to start git: ${err.message}`));
       });
 
       geminiProcess.on('error', (err) => {
-        reject(new Error(`Failed to start AI generator: ${err.message}`));
+        cleanupAndReject(new Error(`Failed to start AI generator: ${err.message}`));
       });
 
       gitProcess.on('close', (code) => {
-        if (code !== 0) {
-          reject(new Error(`Git diff failed with code ${code}: ${stderr.trim()}`));
+        if (code !== 0 && !isSettled) {
+          cleanupAndReject(new Error(`Git diff failed with code ${code}: ${stderr.trim()}`));
         }
       });
 
       geminiProcess.on('close', (code) => {
-        if (code === 0) resolve();
-        else {
+        if (isSettled) return;
+        if (code === 0) {
+          isSettled = true;
+          clearTimeout(timeout);
+          resolve();
+        } else {
           // If we have captured stderr, use it. Otherwise use a generic exit message.
           const cleanErr = stderr.trim();
-          reject(new Error(cleanErr || `Gemini process exited with code ${code}`));
+          cleanupAndReject(new Error(cleanErr || `Gemini process exited with code ${code}`));
         }
       });
     });

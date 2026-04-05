@@ -129,7 +129,7 @@ export const useGitStore = create((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = await res.json();
       set({ remoteStatus: data.error ? null : data });
-    } catch (e) { console.warn("fetchGraph failed:", e); }
+    } catch (e) { console.warn("fetchRemoteStatus failed:", e); }
   },
 
   fetchFileDiff: async (filePath, signal) => {

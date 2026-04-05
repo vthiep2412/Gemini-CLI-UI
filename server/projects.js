@@ -249,8 +249,10 @@ async function getProjects() {
         projects.push(project);
       }
     }
-  } catch {
-    // console.error('Error reading projects directory:', error);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Error reading projects directory:', error);
+    }
   }
   
   // Add manually configured projects that don't exist as folders yet
@@ -268,15 +270,15 @@ async function getProjects() {
         }
       }
       
-              const project = {
-          name: projectName,
-          path: actualProjectDir,
-          displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
-          fullPath: actualProjectDir,
-          isCustomName: !!projectConfig.displayName,
-          isManuallyAdded: true,
-          sessions: []
-        };
+      const project = {
+        name: projectName,
+        path: actualProjectDir,
+        displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
+        fullPath: actualProjectDir,
+        isCustomName: !!projectConfig.displayName,
+        isManuallyAdded: true,
+        sessions: []
+      };
       
       projects.push(project);
     }
@@ -562,9 +564,14 @@ async function deleteProject(projectName) {
   }
   
   // Remove the project directory
-  await fs.rm(projectDir, { recursive: true, force: true });
-  
-  // Remove from project config
+  try {
+    await fs.rm(projectDir, { recursive: true, force: true });
+  } catch (error) {
+    console.error(`Error removing project directory: ${projectDir}`, error);
+    return false; // Return false if deletion fails
+  }
+
+  // Only remove from config if fs.rm succeeded
   const config = await loadProjectConfig();
   delete config[projectName];
   await saveProjectConfig(config);

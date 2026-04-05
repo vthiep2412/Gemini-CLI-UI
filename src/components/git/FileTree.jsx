@@ -7,7 +7,6 @@
  */
 import React, { useMemo, useState, useEffect } from 'react';
 import { ChevronRight } from 'lucide-react';
-// import Tooltip from '../common/Tooltip';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGitStore } from '../../hooks/gitStore';
 import FileRow from './FileRow';

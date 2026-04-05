@@ -3,7 +3,6 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { spawn } from 'child_process';
-import { promisify } from 'util';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);

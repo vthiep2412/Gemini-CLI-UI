@@ -357,7 +357,7 @@ export default function CommitDetail() {
         {error?.action === 'commit-diff' ? (
           <div className="h-40 flex flex-col items-center justify-center gap-2">
             <div className="text-[10px] font-bold tracking-[0.2em] text-red-500 uppercase">Error loading commit</div>
-            <div className="text-[9px] text-(--text-secondary) font-mono px-6 text-center">{error.message}</div>
+            <div className="text-[9px] text-(--text-secondary) font-mono px-6 text-center">{error.message || 'An unexpected error occurred'}</div>
           </div>
         ) : commitDiff === null ? (
           <div className="h-40 flex items-center justify-center">

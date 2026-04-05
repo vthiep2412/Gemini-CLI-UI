@@ -129,7 +129,8 @@ function ToolsSettings({ isOpen, onClose }) {
   const [projectSortOrder, setProjectSortOrder] = useState('name');
 
   // MCP server management state
-  const [mcpServers,] = useState([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [mcpServers, setMcpServers] = useState([]); // setter used in commented fetchMcpServers implementation
   const [showMcpForm, setShowMcpForm] = useState(false);
   const [editingMcpServer, setEditingMcpServer] = useState(null);
   const [mcpFormData, setMcpFormData] = useState({

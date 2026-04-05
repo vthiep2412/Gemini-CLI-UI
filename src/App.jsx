@@ -459,8 +459,13 @@ function AppContent() {
         // Refresh projects to update session list and persist change
         await fetchProjects();
       } else {
-        const error = await res.json();
-        console.error('Failed to update session summary:', error.error);
+        const text = await res.text();
+        try {
+          const parsed = JSON.parse(text);
+          console.error('Failed to update session summary:', parsed.error || parsed.message || parsed);
+        } catch {
+          console.error('Failed to update session summary:', text || res.statusText);
+        }
       }
     } catch (error) {
       console.error('Error updating session summary:', error);

@@ -11,9 +11,22 @@ const DiffTool = ({
 }) => {
   if (!input?.file_path) return null;
 
-  const filename = input.file_path.split('/').pop();
+  const filename = input.file_path.split(/[/\\]/).pop();
   const oldStr = input.old_string || '';
   const newStr = input.new_string || input.content || '';
+
+  const handleOpenFile = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (onFileOpen) {
+      onFileOpen(input.file_path, {
+        old_string: oldStr,
+        new_string: newStr
+      });
+    }
+  };
 
   return (
     <details className="mt-2" open={autoExpandTools}>
@@ -25,26 +38,10 @@ const DiffTool = ({
         <span 
           role="button"
           tabIndex={0}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (onFileOpen) {
-              onFileOpen(input.file_path, {
-                old_string: oldStr,
-                new_string: newStr
-              });
-            }
-          }}
+          onClick={handleOpenFile}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              e.stopPropagation();
-              if (onFileOpen) {
-                onFileOpen(input.file_path, {
-                  old_string: oldStr,
-                  new_string: newStr
-                });
-              }
+              handleOpenFile(e);
             }
           }}
           className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-mono cursor-pointer"
@@ -56,10 +53,8 @@ const DiffTool = ({
         <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <button 
-              onClick={() => onFileOpen && onFileOpen(input.file_path, {
-                old_string: oldStr,
-                new_string: newStr
-              })}
+              type="button"
+              onClick={handleOpenFile}
               className="text-xs font-mono text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 truncate underline cursor-pointer"
             >
               {input.file_path}

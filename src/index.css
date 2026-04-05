@@ -361,7 +361,3 @@ pre, code, .xterm-container, .cm-editor {
 nav svg, .nav-icon {
   transition: color 300ms ease-in-out, transform 300ms ease-in-out !important;
 }
-
-#idk{
-  height: 10rem;
-}

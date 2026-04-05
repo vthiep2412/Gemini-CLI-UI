@@ -66,7 +66,8 @@ function FileRow({
               value={tempName}
               onChange={(e) => setTempName(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              onBlur={() => {
+              onBlur={(e) => {
+                if (e.relatedTarget?.closest('[data-rename-action]')) return;
                 onRenameCancel();
               }}
               onClick={(e) => e.stopPropagation()}

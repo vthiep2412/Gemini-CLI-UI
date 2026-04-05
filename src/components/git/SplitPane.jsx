@@ -16,6 +16,7 @@ export default function SplitPane({ left, right, className = '' }) {
   const containerRef = useRef(null);
   const rafRef = useRef(null);
   const dragging = useRef(false);
+  const hasLoggedStorageError = useRef(false);
 
   const [ratio, setRatio] = useState(() => {
     try {
@@ -63,8 +64,11 @@ export default function SplitPane({ left, right, className = '' }) {
       try {
         localStorage.setItem(STORAGE_KEY, String(newRatio));
       } catch (err) {
-        // Log quota/private-mode errors but continue gracefully
-        console.warn('Failed to write split ratio to localStorage:', err);
+        // Log only the first occurrence to avoid flooding the console
+        if (!hasLoggedStorageError.current) {
+          console.warn('Failed to write split ratio to localStorage (further warnings suppressed):', err);
+          hasLoggedStorageError.current = true;
+        }
       }
     });
   }, []);

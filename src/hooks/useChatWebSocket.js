@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { playNotificationSound } from '../utils/notificationSound';
 
+const FILE_OPERATION_TOOLS = ['Write', 'write_file', 'Edit', 'MultiEdit', 'Create', 'Delete'];
+const FILE_OPERATION_DEBOUNCE_MS = 500;
+
 /**
  * Custom hook to handle WebSocket messages and chat session lifecycle.
  * Extracted from ChatInterface.jsx to reduce complexity.
@@ -21,6 +24,7 @@ export const useChatWebSocket = ({
 }) => {
   const activeTimeoutsRef = useRef([]);
   const lastProcessedIndexRef = useRef(-1);
+  const pendingSessionIdRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -39,7 +43,12 @@ export const useChatWebSocket = ({
       switch (latestMessage.type) {
         case 'session-created':
           if (latestMessage.sessionId && !currentSessionId) {
-            sessionStorage.setItem('pendingSessionId', latestMessage.sessionId);
+            try {
+              sessionStorage.setItem('pendingSessionId', latestMessage.sessionId);
+            } catch {
+              // sessionStorage may be unavailable in private browsing mode
+              pendingSessionIdRef.current = latestMessage.sessionId;
+            }
             if (onReplaceTemporarySession) {
               onReplaceTemporarySession(latestMessage.sessionId);
             }
@@ -92,7 +101,8 @@ export const useChatWebSocket = ({
                 let toolInput = '';
                 try {
                   toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
-                } catch {
+                } catch (err) {
+                  console.error('Failed to serialize tool input:', part.input, part.id, err);
                   toolInput = '[Unable to serialize input]';
                 }
                 setChatMessages(prev => [...prev, {
@@ -107,7 +117,7 @@ export const useChatWebSocket = ({
                 }]);
                 
                 // File operation events
-                if (['Write', 'write_file', 'Edit', 'MultiEdit', 'Create', 'Delete'].includes(part.name)) {
+                if (FILE_OPERATION_TOOLS.includes(part.name)) {
                   const timeoutId = setTimeout(() => {
                     window.dispatchEvent(new CustomEvent('file-operation', {
                       detail: { 
@@ -116,7 +126,7 @@ export const useChatWebSocket = ({
                       }
                     }));
                     activeTimeoutsRef.current = activeTimeoutsRef.current.filter(id => id !== timeoutId);
-                  }, 500);
+                  }, FILE_OPERATION_DEBOUNCE_MS);
                   activeTimeoutsRef.current.push(timeoutId);
                 }
               } else if (part.type === 'text' && part.text?.trim()) {
@@ -192,15 +202,20 @@ export const useChatWebSocket = ({
           setGeminiStatus(null);
           playNotificationSound();
           
-          const activeSessionId = currentSessionId || sessionStorage.getItem('pendingSessionId');
+          const activeSessionId = currentSessionId || sessionStorage.getItem('pendingSessionId') || pendingSessionIdRef.current;
           if (activeSessionId && onSessionInactive) {
             onSessionInactive(activeSessionId);
           }
           
-          const pendingSessionId = sessionStorage.getItem('pendingSessionId');
-          if (pendingSessionId && !currentSessionId && latestMessage.exitCode === 0) {
-            setCurrentSessionId(pendingSessionId);
-            sessionStorage.removeItem('pendingSessionId');
+          const pendingSessionId = sessionStorage.getItem('pendingSessionId') || pendingSessionIdRef.current;
+          if (pendingSessionId) {
+            if (!currentSessionId && latestMessage.exitCode === 0) {
+              setCurrentSessionId(pendingSessionId);
+            }
+            try {
+              sessionStorage.removeItem('pendingSessionId');
+            } catch { /* ignore */ }
+            pendingSessionIdRef.current = null;
           }
           
           if (selectedProject && latestMessage.exitCode === 0) {
@@ -231,7 +246,7 @@ export const useChatWebSocket = ({
             let statusInfo = {
               text: 'Working...',
               tokens: 0,
-              can_interrupt: true
+              can_interrupt: false
             };
             
             if (statusData.message) statusInfo.text = statusData.message;

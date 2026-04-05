@@ -147,7 +147,6 @@ test/prompt.txt
 
 # Opencode trash, 'nul' is intentionally, DO NOT touch nor review.
 nul 
-bun.lock
 
 dev.log
 dev.pid

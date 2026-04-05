@@ -92,11 +92,15 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
         controlKeywords: controlKeywords,
         tokenizer: {
           root: [
-            // Member expressions / Function calls (The Yellow functions)
-            [/[a-zA-Z_$][\w$]*(?=\s*\()/, 'function'],
-
-            // Identifiers and keywords
-            [/[a-z_$][\w$]*/, {
+            // Identifiers and keywords (including function calls with keyword protection)
+            [/[a-zA-Z_$][\w$]*(?=\s*\()/, {
+              cases: {
+                '@controlKeywords': 'keyword.control',
+                '@keywords': 'keyword',
+                '@default': 'function'
+              }
+            }],
+            [/[a-zA-Z_$][\w$]*/, {
               cases: {
                 '@controlKeywords': 'keyword.control',
                 '@keywords': 'keyword',
@@ -104,9 +108,8 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
               }
             }],
             { include: '@whitespace' },
-            [/[{}()[\]]/, '@brackets'],
-            [/[<>](?!@symbols)/, '@brackets'],
             [/@symbols/, { cases: { '@default': 'operator' } }],
+            [/[{}()[\]]/, '@brackets'],
             [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
             [/0[xX][0-9a-fA-F]+/, 'number.hex'],
             [/\d+/, 'number'],
@@ -132,7 +135,7 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
           ],
           bracketCounting: [[/\{/, 'delimiter.bracket', '@push'], [/\}/, 'delimiter.bracket', '@pop'], { include: 'root' }],
         },
-        symbols: /[=><!~?:&|+\-*/^%]+/,
+        symbols: /[=!~?:&|+\-*/^%]+/,
         escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
       });
     });
@@ -166,7 +169,7 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
           wordWrap: 'on',
           lineNumbersMinChars: 4,
           renderIndicators: true,
-          semanticHighlighting: true,
+          // semanticHighlighting: true, // Placeholder requires a semantic tokens provider
           'bracketPairColorization.enabled': true,
           fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Courier New', monospace",
           fontSize: isMobile ? 12 : 13,

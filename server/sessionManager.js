@@ -19,7 +19,7 @@ class SessionManager {
   }
 
   // Create a new session
-  createSession(sessionId, projectPath) {
+  async createSession(sessionId, projectPath) {
     const session = {
       id: sessionId,
       projectPath: projectPath,
@@ -29,18 +29,19 @@ class SessionManager {
     };
     
     this.sessions.set(sessionId, session);
-    this.saveSession(sessionId);
+    await this.saveSession(sessionId);
     
     return session;
   }
 
   // Add a message to session
-  addMessage(sessionId, role, content) {
+  async addMessage(sessionId, role, content) {
     let session = this.sessions.get(sessionId);
     
     if (!session) {
       // Create session if it doesn't exist
-      session = this.createSession(sessionId, '');
+      await this.createSession(sessionId, '');
+      session = this.sessions.get(sessionId);
     }
     
     const message = {
@@ -52,7 +53,7 @@ class SessionManager {
     session.messages.push(message);
     session.lastActivity = new Date();
     
-    this.saveSession(sessionId);
+    await this.saveSession(sessionId);
     
     return session;
   }
@@ -66,7 +67,7 @@ class SessionManager {
   getProjectSessions(projectPath) {
     const sessions = [];
     
-    for (const [session] of this.sessions) {
+    for (const session of this.sessions.values()) {
       if (session.projectPath === projectPath) {
         sessions.push({
           id: session.id,
@@ -184,14 +185,14 @@ class SessionManager {
   }
 
   // Update session summary
-  updateSessionSummary(sessionId, summary) {
+  async updateSessionSummary(sessionId, summary) {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
     
     session.customSummary = summary;
     session.lastActivity = new Date();
     
-    this.saveSession(sessionId);
+    await this.saveSession(sessionId);
     return true;
   }
 

@@ -9,6 +9,13 @@ import React from 'react';
  */
 function Avatar({ name, email, className = "" }) {  
   const initial = (name || '?').charAt(0).toUpperCase();
+  const [hasError, setHasError] = React.useState(false);
+
+  // Reset error state when name/email changes
+  React.useEffect(() => {
+    setHasError(false);
+  }, [name, email]);
+
 
   // Avatar URL derivation priority:
   // 1. Use git username (name) directly — most likely to match a GitHub handle
@@ -34,16 +41,13 @@ function Avatar({ name, email, className = "" }) {
 
   return (
     <div className={`w-8 h-8 rounded-full overflow-hidden bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[14px] shrink-0 relative group/avatar shadow-sm ${className}`}>
-      {username && (
+      {username && !hasError && (
         <img
           key={src}
           src={src}
           alt={name || 'User avatar'}
           className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300"
-          onError={(e) => {
-            e.target.style.opacity = '0';
-            e.target.style.pointerEvents = 'none';
-          }}
+          onError={() => setHasError(true)}
         />
       )}
       <div className="flex w-full h-full items-center justify-center bg-emerald-500/5">

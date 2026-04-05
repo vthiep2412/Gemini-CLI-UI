@@ -15,12 +15,13 @@ const db = new Database(DB_PATH);
 // console.log('Connected to SQLite database');
 
 // Initialize database with schema
-const initializeDatabase = async () => {
+const initializeDatabase = () => {
   try {
     const initSQL = fs.readFileSync(INIT_SQL_PATH, 'utf8');
     db.exec(initSQL);
   } catch (error) {
     console.error('Error initializing database:', error.message);
+    throw error;
   }
 };
 

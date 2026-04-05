@@ -32,6 +32,6 @@ export default tseslint.config(
   },
   {
     // Specific ignore rules to keep Bun/Vite fast
-    ignores: ["dist/", "node_modules/", ".common/" , "tmp/", "src/components/GitPanel.legacy.jsx"],
+    ignores: ["dist/", "node_modules/", ".common/", "tmp/", "src/components/GitPanel.legacy.jsx"],
   }
 );

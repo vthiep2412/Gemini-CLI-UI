@@ -54,8 +54,8 @@ export function useAudioRecorder() {
       };
 
       recorder.onerror = (event) => {
-        console.error('MediaRecorder error:', event);
-        setError('Recording failed');
+        console.error('MediaRecorder error:', event.error);
+        setError(event.error?.message || 'Recording failed');
         setRecording(false);
       };
 

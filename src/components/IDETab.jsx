@@ -202,11 +202,15 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
         // Standard Monaco JS/TS tokenizer adjusted for granular keywords
         tokenizer: {
           root: [
-            // Member expressions / Function calls (The Yellow functions)
-            [/[a-zA-Z_$][\w$]*(?=\s*\()/, 'function'],
-
-            // Identifiers and keywords
-            [/[a-z_$][\w$]*/, {
+            // Identifiers and keywords (including function calls with keyword protection)
+            [/[a-zA-Z_$][\w$]*(?=\s*\()/, {
+              cases: {
+                '@controlKeywords': 'keyword.control',
+                '@keywords': 'keyword',
+                '@default': 'function'
+              }
+            }],
+            [/[a-zA-Z_$][\w$]*/, {
               cases: {
                 '@controlKeywords': 'keyword.control',
                 '@keywords': 'keyword',

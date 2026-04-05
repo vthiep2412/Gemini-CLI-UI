@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
-import { promises as fs } from 'fs';
+import fs from 'fs';
+const fsPromises = fs.promises;
 import path from 'path';
 import os from 'os';
 import sessionManager from './sessionManager.js';
@@ -52,7 +53,7 @@ async function spawnGemini(command, options = {}, ws) {
     try {
       // Create temp directory in the project directory so Gemini can access it
       tempDir = path.join(workingDir, '.tmp', 'images', Date.now().toString());
-      await fs.mkdir(tempDir, { recursive: true });
+      await fsPromises.mkdir(tempDir, { recursive: true });
 
       // Save each image to a temp file
       for (const [index, image] of images.entries()) {
@@ -69,14 +70,14 @@ async function spawnGemini(command, options = {}, ws) {
         const filepath = path.join(tempDir, filename);
 
         // Write base64 data to file
-        await fs.writeFile(filepath, Buffer.from(base64Data, 'base64'));
+        await fsPromises.writeFile(filepath, Buffer.from(base64Data, 'base64'));
         tempImagePaths.push(filepath);
       }
 
       // Include the full image paths in the prompt for Gemini to reference
       // Gemini CLI can read images from file paths in the prompt
       if (tempImagePaths.length > 0 && command && command.trim()) {
-        const imageNote = `\n\n[画像を添付しました: ${tempImagePaths.length}枚の画像があります。以下のパスに保存されています:]\n${tempImagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+        const imageNote = `\n\n[Images attached: there are ${tempImagePaths.length} images. They are saved at the following paths:]\n${tempImagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
         const modifiedCommand = command + imageNote;
 
         // Update the command in args
@@ -103,11 +104,11 @@ async function spawnGemini(command, options = {}, ws) {
   try {
     // Check for MCP config in ~/.gemini.json
     const geminiConfigPath = path.join(os.homedir(), '.gemini.json');
-    const fsSync = await import('fs');
 
-    if (fsSync.existsSync(geminiConfigPath)) {
+    try {
+      await fsPromises.access(geminiConfigPath);
       try {
-        const geminiConfig = JSON.parse(fsSync.readFileSync(geminiConfigPath, 'utf8'));
+        const geminiConfig = JSON.parse(await fsPromises.readFile(geminiConfigPath, 'utf8'));
 
         // Check global MCP servers
         const hasGlobalServers = geminiConfig.mcpServers && Object.keys(geminiConfig.mcpServers).length > 0;
@@ -122,6 +123,9 @@ async function spawnGemini(command, options = {}, ws) {
       } catch (err) { 
         console.warn("Caught suppressed error, MCP config check failed:", err.message); 
       }
+    } catch (error) {
+      // If there's any error checking for MCP configs, don't add the flag
+      console.warn("Caught suppressed error, MCP config check failed:", error.message);
     }
   } catch (error) {
     // If there's any error checking for MCP configs, don't add the flag
@@ -139,6 +143,11 @@ async function spawnGemini(command, options = {}, ws) {
 
   // Try to find gemini in PATH first, then fall back to environment variable
   const geminiPath = process.env.GEMINI_PATH || 'gemini';
+
+  // Save user message to session when starting
+  if (command && capturedSessionId) {
+    await sessionManager.addMessage(capturedSessionId, 'user', command);
+  }
 
   return new Promise((resolve, reject) => {
     const geminiProcess = spawn(geminiPath, args, {
@@ -177,11 +186,6 @@ async function spawnGemini(command, options = {}, ws) {
       }
     }, timeoutMs);
     
-    // Save user message to session when starting
-    if (command && capturedSessionId) {
-      sessionManager.addMessage(capturedSessionId, 'user', command);
-    }
-    
     // Create response handler for intelligent buffering
     let responseHandler;
     if (ws) {
@@ -194,7 +198,7 @@ async function spawnGemini(command, options = {}, ws) {
     
     // Handle stdout (Gemini outputs plain text)
     
-    geminiProcess.stdout.on('data', (data) => {
+    geminiProcess.stdout.on('data', async (data) => {
       const rawOutput = data.toString();
       
       // Signal activity
@@ -222,11 +226,11 @@ async function spawnGemini(command, options = {}, ws) {
         sessionCreatedSent = true;
         
         // Create session in session manager
-        sessionManager.createSession(capturedSessionId, cwd || process.cwd());
+        await sessionManager.createSession(capturedSessionId, cwd || process.cwd());
         
         // Save the user message now that we have a session ID
         if (command) {
-          sessionManager.addMessage(capturedSessionId, 'user', command);
+          await sessionManager.addMessage(capturedSessionId, 'user', command);
         }
         
         // Update process key with captured session ID
@@ -269,7 +273,10 @@ async function spawnGemini(command, options = {}, ws) {
     
     // Handle process completion
     geminiProcess.on('close', async (code) => {
-      console.log(`Process finished. Final output:`, fullResponse);
+      // console.log(`Process finished. Final output:`, fullResponse);
+      if (options.debug) {
+        console.log(`Process finished. Response length: ${fullResponse.length} chars`);
+      }
       // console.log(`Gemini CLI process exited with code ${code}`);
       clearTimeout(timeout);
       
@@ -285,7 +292,7 @@ async function spawnGemini(command, options = {}, ws) {
       
       // Save assistant response to session if we have one
       if (finalSessionId && fullResponse) {
-        sessionManager.addMessage(finalSessionId, 'assistant', fullResponse);
+        await sessionManager.addMessage(finalSessionId, 'assistant', fullResponse);
       }
       
       ws.send(JSON.stringify({
@@ -297,12 +304,12 @@ async function spawnGemini(command, options = {}, ws) {
       // Clean up temporary image files if any
       if (geminiProcess.tempImagePaths && geminiProcess.tempImagePaths.length > 0) {
         for (const imagePath of geminiProcess.tempImagePaths) {
-          await fs.unlink(imagePath).catch(err => {
+          await fsPromises.unlink(imagePath).catch(err => {
             console.error(`Failed to delete temp image ${imagePath}:`, err)
           });
         }
         if (geminiProcess.tempDir) {
-          await fs.rm(geminiProcess.tempDir, { recursive: true, force: true }).catch(err => {
+          await fsPromises.rm(geminiProcess.tempDir, { recursive: true, force: true }).catch(err => {
             console.error(`Failed to delete temp directory ${geminiProcess.tempDir}:`, err)
           });
         }

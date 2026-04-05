@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { cn } from '../lib/utils';
 
 function GeminiStatus({ status, onAbort, isLoading }) {
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [animationPhase, setAnimationPhase] = useState(0);
-  
+
   // Update elapsed time every second
   useEffect(() => {
     if (!isLoading) {
@@ -21,17 +19,6 @@ function GeminiStatus({ status, onAbort, isLoading }) {
     return () => clearInterval(timer);
   }, [isLoading]);
   
-  // Animate the status indicator
-  useEffect(() => {
-    if (!isLoading) return;
-    
-    const timer = setInterval(() => {
-      setAnimationPhase(prev => (prev + 1) % 4);
-    }, 500);
-    
-    return () => clearInterval(timer);
-  }, [isLoading]);
-  
   if (!isLoading) return null;
   
   // Clever action words that cycle
@@ -42,30 +29,28 @@ function GeminiStatus({ status, onAbort, isLoading }) {
   const statusText = status?.text || actionWords[actionIndex];
   const canInterrupt = status?.can_interrupt !== false;
   
-  // Animation characters
-  const spinners = ['✻', '✹', '✸', '✶'];
-  const currentSpinner = spinners[animationPhase];
-  
   return (
-    <div className="w-full mb-6 animate-in slide-in-from-bottom duration-300">
-      <div className="flex items-center justify-between max-w-4xl mx-auto bg-linear-to-r from-cyan-900 to-blue-900 dark:from-cyan-950 dark:to-blue-950 text-white rounded-lg shadow-lg px-4 py-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            {/* Animated spinner */}
-            <span className={cn(
-              "text-xl transition-all duration-500",
-              animationPhase % 2 === 0 ? "text-cyan-400 scale-110" : "text-cyan-300"
-            )}>
-              {currentSpinner}
-            </span>
-            
-            {/* Status text - first line */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-sm">{statusText}...</span>
-                <span className="text-gray-400 text-sm">({elapsedTime}s)</span>
-              </div>
+    <div className="w-full mb-6 animate-in slide-in-from-bottom-4 duration-500 ease-out fill-mode-both">
+      <div className="flex items-center justify-between max-w-4xl mx-auto glass dark:glass-dark text-gray-900 dark:text-white rounded-2xl shadow-xl px-5 py-3.5 border border-white/20 dark:border-gray-700/50">
+        <div className="flex items-center gap-4 flex-1">
+          {/* Animated Pulse Indicator */}
+          <div className="relative flex items-center justify-center">
+            <div className="w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
+            <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-60" />
+            <div className="absolute -inset-1 w-5 h-5 bg-cyan-500/20 rounded-full animate-pulse" />
+          </div>
+          
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2.5">
+              <span className="font-semibold text-sm tracking-tight">{statusText}</span>
+              <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 shadow-sm" />
+              <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400 opacity-80">{elapsedTime}s</span>
             </div>
+            {status?.tokens > 0 && (
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 font-medium tabular-nums mt-0.5">
+                Processed {status.tokens} tokens
+              </div>
+            )}
           </div>
         </div>
         
@@ -73,12 +58,14 @@ function GeminiStatus({ status, onAbort, isLoading }) {
         {canInterrupt && onAbort && (
           <button
             onClick={onAbort}
-            className="ml-3 text-xs bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md transition-colors flex items-center gap-1.5 shrink-0"
+            className="group ml-4 px-3.5 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-600 dark:text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 rounded-full transition-all duration-300 flex items-center gap-1.5 shrink-0 text-xs font-bold uppercase tracking-wider"
+            title="Cancel Generation"
+            aria-label="Cancel Generation"
           >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-            <span className="hidden sm:inline">Stop</span>
+            <span className="hidden sm:inline">Abort</span>
           </button>
         )}
       </div>

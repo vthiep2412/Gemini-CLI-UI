@@ -184,6 +184,7 @@ export default function FileRow({ filePath, status, mode = 'changes', section, i
         <div className={`flex items-center gap-1 transition-all duration-200 ${isMobile ? 'opacity-100 px-1' : 'opacity-0 group-hover:opacity-100'}`}>
           <Tooltip label={isSideBySide === true ? 'Switch to Unified View' : 'Switch to Split View'}>
             <button
+              aria-label={isSideBySide === true ? 'Switch to Unified View' : 'Switch to Split View'}
               onClick={(e) => { 
                 e.stopPropagation(); 
                 setIsSideBySide(prev => prev === null ? true : !prev); 

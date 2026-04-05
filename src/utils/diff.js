@@ -9,7 +9,7 @@ const MAX_CACHE_SIZE = 100;
 export const createDiff = (oldStr, newStr) => {
   // Use full content for cache key to avoid collisions
   const cacheKey = `${oldStr || ''}\x00${newStr || ''}`;
-  if (cache.has(cacheKey)) return [...cache.get(cacheKey)];
+  if (cache.has(cacheKey)) return cache.get(cacheKey).map(entry => ({ ...entry }));
   
   // Clean up cache if too large
   if (cache.size >= MAX_CACHE_SIZE) {
@@ -54,5 +54,5 @@ export const createDiff = (oldStr, newStr) => {
   }
   
   cache.set(cacheKey, diff);
-  return diff;
+  return diff.map(entry => ({ ...entry }));
 };

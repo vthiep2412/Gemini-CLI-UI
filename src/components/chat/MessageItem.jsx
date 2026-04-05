@@ -15,8 +15,7 @@ const MessageItem = memo(({
   onFileOpen, 
   onShowSettings, 
   autoExpandTools, 
-  showRawParameters,
-  createDiff
+  showRawParameters
 }) => {
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
@@ -152,7 +151,6 @@ const MessageItem = memo(({
                     autoExpandTools={autoExpandTools}
                     showRawParameters={showRawParameters}
                     onFileOpen={onFileOpen}
-                    createDiff={createDiff}
                   />
                 ) : message.isInteractivePrompt ? (
                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
@@ -241,10 +239,28 @@ const MessageItem = memo(({
                       {(() => {
                         const content = String(message.toolResult.content || '');
                         
-                        if ((message.toolName === 'TodoWrite' || message.toolName === 'TodoRead') && (content.includes('Todos') || content.startsWith('['))) {
+                        const isJsonArray = content.trim().startsWith('[');
+                        
+                        if (message.toolName === 'TodoWrite' || message.toolName === 'TodoRead') {
                           try {
                             let todos = null;
-                            if (content.startsWith('[')) todos = JSON.parse(content);
+                            if (isJsonArray) {
+                              todos = JSON.parse(content.trim());
+                            } else if (content.includes('Todos')) {
+                              // Locate the start of the JSON array after the "Todos" marker
+                              const markerIndex = content.indexOf('Todos');
+                              const startIndex = content.indexOf('[', markerIndex);
+                              if (startIndex !== -1) {
+                                const jsonPart = content.substring(startIndex);
+                                // Find the matching closing bracket to extract the JSON array
+                                const lastBracketIndex = jsonPart.lastIndexOf(']');
+                                if (lastBracketIndex !== -1) {
+                                  const finalJson = jsonPart.substring(0, lastBracketIndex + 1);
+                                  todos = JSON.parse(finalJson);
+                                }
+                              }
+                            }
+
                             if (todos && Array.isArray(todos)) {
                               return (
                                 <div>
@@ -253,7 +269,9 @@ const MessageItem = memo(({
                                 </div>
                               );
                             }
-                          } catch (e) { console.error('Error parsing todo list:', e); }
+                          } catch (e) { 
+                            console.error('Error parsing todo list:', e);
+                          }
                         }
 
                         if (message.toolName === 'exit_plan_mode') {

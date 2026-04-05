@@ -13,7 +13,8 @@ import { useMessages } from '../contexts/MessageContext';
 import MessageItem from './chat/MessageItem';
 import { useChatWebSocket } from '../hooks/useChatWebSocket';
 import { useChatHistory } from '../hooks/useChatHistory';
-import { createDiff } from '../utils/diff';
+
+const DEFAULT_PERMISSION_MODE = 'default';
 
 // ImageAttachment component for displaying image previews
 const ImageAttachment = ({ file, onRemove, uploadProgress, error }) => {
@@ -91,20 +92,25 @@ function ChatInterface({
     try {
       const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
       return settings.skipPermissions || false;
-    } catch { return false; }
+    } catch (e) { 
+      console.debug('Failed to parse gemini-tools-settings:', e);
+      return false; 
+    }
   });
   
   const [selectedModel, setSelectedModel] = useState(() => {
     try {
       const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
       return settings.selectedModel || 'gemini-2.5-flash';
-    } catch { return 'gemini-2.5-flash'; }
+    } catch (e) { 
+      console.debug('Failed to parse gemini-tools-settings:', e);
+      return 'gemini-2.5-flash'; 
+    }
   });
   
   const [isSystemSessionChange, setIsSystemSessionChange] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const permissionMode = 'default';
   const [attachedImages, setAttachedImages] = useState([]);
   
   // Refs
@@ -189,8 +195,12 @@ function ChatInterface({
   }, [input, selectedProject]);
 
   useEffect(() => {
-    if (selectedProject && chatMessages.length > 0) {
-      localStorage.setItem(`chat_messages_${selectedProject.name}`, JSON.stringify(chatMessages));
+    if (selectedProject) {
+      if (chatMessages.length > 0) {
+        localStorage.setItem(`chat_messages_${selectedProject.name}`, JSON.stringify(chatMessages));
+      } else {
+        localStorage.removeItem(`chat_messages_${selectedProject.name}`);
+      }
     }
   }, [chatMessages, selectedProject]);
 
@@ -228,6 +238,16 @@ function ChatInterface({
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
+
+  // Clear upload error after 5 seconds
+  useEffect(() => {
+    if (uploadError) {
+      const timer = setTimeout(() => {
+        setUploadError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [uploadError]);
 
   const fetchProjectFiles = useCallback(async () => {
     if (!selectedProject) return;
@@ -278,14 +298,6 @@ function ChatInterface({
     if (chatMessages.length <= visibleMessageCount) return chatMessages;
     return chatMessages.slice(-visibleMessageCount);
   }, [chatMessages, visibleMessageCount]);
-
-  useEffect(() => {
-    if (chatMessages.length > 0) {
-      if (!isUserScrolledUp) {
-        scrollToBottom();
-      }
-    }
-  }, [selectedSession?.id, chatMessages.length, scrollToBottom]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -348,7 +360,6 @@ function ChatInterface({
         console.error('Image upload failed:', err);
         setUploadError(err.message);
         toast.error(`Failed to upload images: ${err.message}`);
-        setUploadingImages(false);
         return;
       } finally {
         setUploadingImages(false);
@@ -361,7 +372,7 @@ function ChatInterface({
     setCanAbortSession(true);
     setGeminiStatus({ text: 'Processing', tokens: 0, can_interrupt: true });
     setIsUserScrolledUp(false);
-    setTimeout(() => scrollToBottom(), 100);
+    // Centralized useEffect handles scrolling
     
     const sessionToActivate = currentSessionId || `new-session-${Date.now()}`;
     if (onSessionActive) onSessionActive(sessionToActivate);
@@ -391,7 +402,7 @@ function ChatInterface({
         sessionId: currentSessionId, 
         resume: !!currentSessionId, 
         toolsSettings, 
-        permissionMode, 
+        permissionMode: DEFAULT_PERMISSION_MODE, 
         model: selectedModel, 
         images: uploadedImages 
       } 
@@ -500,7 +511,6 @@ function ChatInterface({
                   onShowSettings={onShowSettings}
                   autoExpandTools={autoExpandTools}
                   showRawParameters={showRawParameters}
-                  createDiff={createDiff}
                 />
               ))}
             </>
@@ -528,11 +538,18 @@ function ChatInterface({
           
           <div className="max-w-4xl mx-auto mb-3">
             <div className="flex items-center justify-center gap-3">
-              <div className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all duration-200 ${isYoloMode ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border-orange-300' : 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300 border-cyan-300'}`}>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full animate-pulse ${isYoloMode ? 'bg-orange-500' : 'bg-cyan-500'}`} />
-                  <span>{isYoloMode ? 'Gemini YOLO' : 'Gemini Default'}</span>
+              <div className={`px-4 py-1.5 rounded-full text-xs font-semibold border shadow-sm transition-all duration-300 flex items-center gap-2.5 ${
+                isYoloMode 
+                  ? 'bg-orange-500/10 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 border-orange-200/50 dark:border-orange-800/50 shadow-orange-500/5' 
+                  : 'bg-cyan-500/10 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 border-cyan-200/50 dark:border-cyan-800/50 shadow-cyan-500/5'
+              }`}>
+                <div className="relative flex items-center justify-center">
+                  <div className={`w-2 h-2 rounded-full ${isYoloMode ? 'bg-orange-500' : 'bg-cyan-500'}`} />
+                  <div className={`absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-60 ${isYoloMode ? 'bg-orange-400' : 'bg-cyan-400'}`} />
                 </div>
+                <span className="tracking-wide uppercase text-[10px] sm:text-xs">
+                  {isYoloMode ? 'Gemini YOLO' : 'Gemini Default'}
+                </span>
               </div>
               {isUserScrolledUp && chatMessages.length > 0 && (
                 <button onClick={scrollToBottom} className="w-8 h-8 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-transform">
@@ -551,13 +568,23 @@ function ChatInterface({
               </div>
             )}
             {showFileDropdown && filteredFiles.length > 0 && (
-              <div className="absolute bottom-full left-0 w-full mb-2 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border dark:border-gray-700 overflow-hidden z-20">
-                {filteredFiles.map((file, idx) => (
-                  <div key={file.path} className={`px-4 py-3 cursor-pointer transition-colors ${selectedFileIndex === idx ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`} onClick={() => selectFile(file)}>
-                    <div className="font-medium text-sm text-gray-900 dark:text-white">{file.name}</div>
-                    <div className="text-xs text-gray-500 truncate">{file.path}</div>
-                  </div>
-                ))}
+              <div className="absolute bottom-full left-0 w-full mb-3 glass dark:glass-dark rounded-2xl shadow-2xl border border-white/20 dark:border-gray-700/50 overflow-hidden z-20 animate-in slide-in-from-bottom-2 fade-in">
+                <div className="max-h-75 overflow-y-auto scrollbar-thin">
+                  {filteredFiles.map((file, idx) => (
+                    <div 
+                      key={file.path} 
+                      className={`px-4 py-3 cursor-pointer transition-all duration-150 border-b border-gray-100/10 last:border-0 ${
+                        selectedFileIndex === idx 
+                          ? 'bg-blue-500/20 dark:bg-blue-400/20 border-l-4 border-l-blue-500 pl-3' 
+                          : 'hover:bg-white/10 dark:hover:bg-white/5 pl-4'
+                      }`} 
+                      onClick={() => selectFile(file)}
+                    >
+                      <div className="font-semibold text-sm text-gray-900 dark:text-white leading-tight">{file.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate opacity-70 mt-0.5">{file.path}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             <div {...getRootProps()} className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-lg border dark:border-gray-600 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
@@ -579,14 +606,18 @@ function ChatInterface({
             </div>
             
             {(uploadingImages || uploadError) && (
-              <div className="absolute -top-10 left-0 right-0 flex items-center justify-center pointer-events-none">
+              <div className="absolute -top-10 left-0 right-0 flex items-center justify-center">
                 {uploadingImages ? (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs shadow-lg animate-fade-in">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs shadow-lg animate-fade-in pointer-events-none">
                     <Loader2 className="w-3 h-3 animate-spin" />
                     <span>Uploading images...</span>
                   </div>
                 ) : uploadError && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs shadow-lg animate-fade-in">
+                  <div 
+                    onClick={() => setUploadError(null)}
+                    className="flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs shadow-lg animate-fade-in cursor-pointer hover:bg-red-600 transition-colors"
+                    title="Dismiss error"
+                  >
                     <AlertCircle className="w-3 h-3" />
                     <span>{uploadError}</span>
                   </div>
