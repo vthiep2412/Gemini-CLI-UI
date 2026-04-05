@@ -26,9 +26,14 @@ export function useAudioRecorder() {
       streamRef.current = stream;
 
       // Determine supported MIME type
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
-        ? 'audio/webm' 
-        : 'audio/mp4';
+      let mimeType;
+      if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else {
+        throw new Error('No supported audio MIME type found');
+      }
       
       // Create media recorder
       const recorder = new MediaRecorder(stream, { mimeType });
@@ -62,7 +67,6 @@ export function useAudioRecorder() {
       // Start recording
       recorder.start();
       setRecording(true);
-      // Debug - Recording started
     } catch (err) {
       console.error('Failed to start recording:', err);
       setError(err.message || 'Failed to start recording');

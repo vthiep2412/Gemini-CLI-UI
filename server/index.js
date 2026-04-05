@@ -12,10 +12,21 @@ try {
   const envFile = fs.readFileSync(envPath, 'utf8');
   envFile.split('\n').forEach(line => {
     const trimmedLine = line.trim();
+    // Ignore empty lines and lines starting with #
     if (trimmedLine && !trimmedLine.startsWith('#')) {
       const [key, ...valueParts] = trimmedLine.split('=');
       if (key && valueParts.length > 0 && !process.env[key]) {
-        process.env[key] = valueParts.join('=').trim();
+        let value = valueParts.join('=').trim();
+        // Strip inline comments if they exist (unquoted #)
+        const commentIndex = value.indexOf('#');
+        if (commentIndex !== -1) {
+          value = value.substring(0, commentIndex).trim();
+        }
+        // Strip surrounding single/double quotes
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          value = value.substring(1, value.length - 1);
+        }
+        process.env[key] = value;
       }
     }
   });
@@ -37,6 +48,36 @@ import os from 'os';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
+import multer from 'multer';
+
+// Shared multer instances
+const uploadMemory = multer({ storage: multer.memoryStorage() });
+const uploadDisk = multer({
+  storage: multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadDir = path.join(os.tmpdir(), 'gemini-ui-uploads', String(req.user?.id || 'default'));
+      await fsPromises.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      cb(null, uniqueSuffix + '-' + sanitizedName);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 5
+  }
+});
 
 import { getProjects, renameProject, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnGemini, abortGeminiSession } from './gemini-cli.js';
@@ -49,6 +90,19 @@ import { validateApiKey, authenticateToken, authenticateWebSocket } from './midd
 
 // File system watcher for projects folder
 let projectsWatcher = null;
+
+// Compiled terminal output patterns for automatic URL opening
+/* eslint-disable no-control-regex */
+const TERMINAL_OUTPUT_PATTERNS = [
+  /(?:xdg-open|open|start)\s+(https?:\/\/[^\s\x1b\x07]+)/g,
+  /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
+  /Opening\s+(https?:\/\/[^\s\x1b\x07]+)/gi,
+  /Visit:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
+  /View at:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
+  /Browse to:\s*(https?:\/\/[^\s\x1b\x07]+)/gi
+];
+/* eslint-enable no-control-regex */
+
 // Cross-platform home dir (Bun-friendly) with safe fallbacks
 const getHomeDir = () => {
   // Cross-platform, Bun-friendly home directory resolution
@@ -467,7 +521,7 @@ app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, re
     
     // Apply pagination
     const { limit = 5, offset = 0 } = req.query;
-    const paginatedSessions = sessions.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+    const paginatedSessions = sessions.slice(parseInt(offset, 10), parseInt(offset, 10) + parseInt(limit, 10));
     
     res.json({
       sessions: paginatedSessions,
@@ -481,8 +535,21 @@ app.get('/api/projects/:projectName/sessions', authenticateToken, async (req, re
 // Get messages for a specific session
 app.get('/api/projects/:projectName/sessions/:sessionId/messages', authenticateToken, async (req, res) => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { sessionId, projectName: _projectName /* intentionally unused on purpose */ } = req.params;
+    const { sessionId, projectName } = req.params;
+    
+    // Resolve project directory to verify ownership
+    const projectPath = await extractProjectDirectory(projectName);
+    const session = sessionManager.getSession(sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Security: Verify the session belongs to requested project
+    if (session.projectPath !== projectPath) {
+      return res.status(403).json({ error: 'Session project mismatch' });
+    }
+
     const messages = sessionManager.getSessionMessages(sessionId);
     res.json({ messages });
   } catch (error) {
@@ -723,8 +790,15 @@ app.put('/api/projects/:projectName/file/rename', authenticateToken, async (req,
     }
 
     const isOldPathSafe = await isPathInsideProject(projectName, oldPath);
-    const newPathParent = path.dirname(newPath);
-    const isNewPathSafe = await isPathInsideProject(projectName, newPathParent);
+    
+    // For the new path, we check its nearest existing ancestor since the destination directory
+    // might not exist yet (e.g., when creating a nested structure during rename).
+    let nearestExistingAncestor = path.dirname(newPath);
+    while (nearestExistingAncestor !== path.parse(nearestExistingAncestor).root && !fs.existsSync(nearestExistingAncestor)) {
+      nearestExistingAncestor = path.dirname(nearestExistingAncestor);
+    }
+    
+    const isNewPathSafe = await isPathInsideProject(projectName, nearestExistingAncestor);
 
     if (!isOldPathSafe || !isNewPathSafe) {
       return res.status(403).json({ error: 'Path traversal detected or invalid destination' });
@@ -787,8 +861,7 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
       actualPath = await extractProjectDirectory(req.params.projectName);
     } catch (error) {
       console.error('Error extracting project directory:', error);
-      // Fallback to simple dash replacement
-      actualPath = req.params.projectName.replace(/-/g, '/');
+      return res.status(400).json({ error: 'Invalid project name' });
     }
     
     // Check if path exists
@@ -996,19 +1069,9 @@ function handleShellConnection(ws) {
             if (ws.readyState === ws.OPEN) {
               let outputData = data;
               
-              // Check for various URL opening patterns
-              /* eslint-disable no-control-regex */
-              const patterns = [
-                /(?:xdg-open|open|start)\s+(https?:\/\/[^\s\x1b\x07]+)/g,
-                /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
-                /Opening\s+(https?:\/\/[^\s\x1b\x07]+)/gi,
-                /Visit:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
-                /View at:\s*(https?:\/\/[^\s\x1b\x07]+)/gi,
-                /Browse to:\s*(https?:\/\/[^\s\x1b\x07]+)/gi
-              ];
-              /* eslint-enable no-control-regex */
-              
-              patterns.forEach(pattern => {
+              // Use pre-compiled patterns and reset lastIndex before scanning chunk
+              TERMINAL_OUTPUT_PATTERNS.forEach(pattern => {
+                pattern.lastIndex = 0; // CRITICAL: Reset global regex state for each chunk
                 let match;
                 while ((match = pattern.exec(data)) !== null) {
                   const url = match[1];
@@ -1091,11 +1154,8 @@ function handleShellConnection(ws) {
 // Audio transcription endpoint
 app.post('/api/transcribe', authenticateToken, async (req, res) => {
   try {
-    const multer = (await import('multer')).default;
-    const upload = multer({ storage: multer.memoryStorage() });
-    
     // Handle multipart form data
-    upload.single('audio')(req, res, async (err) => {
+    uploadMemory.single('audio')(req, res, async (err) => {
       if (err) {
         return res.status(400).json({ error: 'Failed to process audio file' });
       }
@@ -1240,45 +1300,8 @@ Agent instructions:`;
 // Image upload endpoint
 app.post('/api/projects/:projectName/upload-images', authenticateToken, async (req, res) => {
   try {
-    const multer = (await import('multer')).default;
-    const path = (await import('path')).default;
-    const fs = (await import('fs')).promises;
-    const os = (await import('os')).default;
-    
-    // Configure multer for image uploads
-    const storage = multer.diskStorage({
-      destination: async (req, file, cb) => {
-        const uploadDir = path.join(os.tmpdir(), 'gemini-ui-uploads', String(req.user.id));
-        await fs.mkdir(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-      },
-      filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        cb(null, uniqueSuffix + '-' + sanitizedName);
-      }
-    });
-    
-    const fileFilter = (req, file, cb) => {
-      const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
-      if (allowedMimes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed.'));
-      }
-    };
-    
-    const upload = multer({
-      storage,
-      fileFilter,
-      limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB
-        files: 5
-      }
-    });
-    
     // Handle multipart form data
-    upload.array('images', 5)(req, res, async (err) => {
+    uploadDisk.array('images', 5)(req, res, async (err) => {
       if (err) {
         return res.status(400).json({ error: err.message });
       }
@@ -1369,7 +1392,7 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
         const ownerPerm = (mode >> 6) & 7;
         const groupPerm = (mode >> 3) & 7;
         const otherPerm = mode & 7;
-        item.permissions = ((mode >> 6) & 7).toString() + ((mode >> 3) & 7).toString() + (mode & 7).toString();
+        item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
         item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
       } catch {
         // If stat fails, provide default values

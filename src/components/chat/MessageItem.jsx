@@ -252,8 +252,19 @@ const MessageItem = memo(({
                               const startIndex = content.indexOf('[', markerIndex);
                               if (startIndex !== -1) {
                                 const jsonPart = content.substring(startIndex);
-                                // Find the matching closing bracket to extract the JSON array
-                                const lastBracketIndex = jsonPart.lastIndexOf(']');
+                                let depth = 0;
+                                let lastBracketIndex = -1;
+                                for (let i = 0; i < jsonPart.length; i++) {
+                                  if (jsonPart[i] === '[') depth++;
+                                  else if (jsonPart[i] === ']') {
+                                    depth--;
+                                    if (depth === 0) {
+                                      lastBracketIndex = i;
+                                      break;
+                                    }
+                                  }
+                                }
+
                                 if (lastBracketIndex !== -1) {
                                   const finalJson = jsonPart.substring(0, lastBracketIndex + 1);
                                   todos = JSON.parse(finalJson);

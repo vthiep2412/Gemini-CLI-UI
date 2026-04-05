@@ -40,8 +40,7 @@ class SessionManager {
     
     if (!session) {
       // Create session if it doesn't exist
-      await this.createSession(sessionId, '');
-      session = this.sessions.get(sessionId);
+      session = await this.createSession(sessionId, '');
     }
     
     const message = {

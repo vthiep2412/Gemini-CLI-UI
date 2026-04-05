@@ -11,6 +11,15 @@ const formatToolResultContent = (toolResult) => {
 };
 
 /**
+ * Safely converts a value to an ISO string, falling back to current time if invalid.
+ */
+const safeToISOString = (value) => {
+  const date = new Date(value ?? Date.now());
+  if (isNaN(date.getTime())) return new Date().toISOString();
+  return date.toISOString();
+};
+
+/**
  * Converts raw Gemini CLI session messages into the app's internal chat message format.
  * @param {Array} rawMessages - The raw messages from the API.
  * @returns {Array} converted - The normalized chat messages.
@@ -29,7 +38,7 @@ export const convertSessionMessages = (rawMessages) => {
           toolResults.set(part.tool_use_id, {
             content: part.content,
             isError: part.is_error,
-            timestamp: new Date(msg.timestamp || Date.now())
+            timestamp: safeToISOString(msg.timestamp)
           });
         }
       }
@@ -50,7 +59,7 @@ export const convertSessionMessages = (rawMessages) => {
         converted.push({
           type: 'user',
           content: content,
-          timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString()
+          timestamp: safeToISOString(msg.timestamp)
         });
       }
     } else if (msg.message?.role === 'assistant' && msg.message?.content) {
@@ -60,20 +69,20 @@ export const convertSessionMessages = (rawMessages) => {
             converted.push({
               type: 'assistant',
               content: part.text,
-              timestamp: msg.timestamp || new Date().toISOString()
+              timestamp: safeToISOString(msg.timestamp)
             });
           } else if (part.type === 'tool_use') {
             const toolResult = toolResults.get(part.id);
             converted.push({
               type: 'assistant',
               content: '',
-              timestamp: msg.timestamp || new Date().toISOString(),
+              timestamp: safeToISOString(msg.timestamp),
               isToolUse: true,
               toolName: part.name,
               toolInput: JSON.stringify(part.input ?? {}),
               toolResult: formatToolResultContent(toolResult),
               toolError: toolResult?.isError || false,
-              toolResultTimestamp: toolResult?.timestamp || new Date()
+              toolResultTimestamp: safeToISOString(toolResult?.timestamp)
             });
           }
         }
@@ -81,7 +90,7 @@ export const convertSessionMessages = (rawMessages) => {
         converted.push({
           type: 'assistant',
           content: msg.message.content,
-          timestamp: msg.timestamp || new Date().toISOString()
+          timestamp: safeToISOString(msg.timestamp)
         });
       }
     }

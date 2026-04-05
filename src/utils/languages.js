@@ -8,8 +8,7 @@ export const getLanguage = (filename) => {
   
   // Specific filename prefix/match cases
   if (lower.startsWith('.env')) return 'ini';
-  if (lower === '.gitignore' || lower === '.npmignore') return 'shell';
-  if (lower === '.dockerignore') return 'shell';
+  if (lower === '.gitignore' || lower === '.npmignore' || lower === '.dockerignore') return 'shell';
   if (lower === 'dockerfile') return 'dockerfile';
   if (lower === 'makefile') return 'makefile';
 

@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import ChevronIcon from '../../common/ChevronIcon';
 
 const PlanTool = ({ plan, autoExpandTools }) => {
   const [isOpen, setIsOpen] = useState(autoExpandTools);
+
+  useEffect(() => {
+    setIsOpen(autoExpandTools);
+  }, [autoExpandTools]);
+
+  // Hooks must be called before any early returns for Rules of Hooks compliance. Do not move this return above.
   if (!plan) return null;
 
   // Replace escaped newlines with actual newlines

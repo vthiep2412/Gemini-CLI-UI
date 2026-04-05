@@ -36,8 +36,8 @@ function GeminiStatus({ status, onAbort, isLoading }) {
           {/* Animated Pulse Indicator */}
           <div className="relative flex items-center justify-center">
             <div className="w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
-            <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping opacity-60" />
-            <div className="absolute -inset-1 w-5 h-5 bg-cyan-500/20 rounded-full animate-pulse" />
+            <div className="absolute inset-0 w-3 h-3 bg-cyan-400 rounded-full animate-ping motion-reduce:animate-none opacity-60" />
+            <div className="absolute -inset-1 w-5 h-5 bg-cyan-500/20 rounded-full animate-pulse motion-reduce:animate-none" />
           </div>
           
           <div className="flex flex-col">
@@ -59,8 +59,8 @@ function GeminiStatus({ status, onAbort, isLoading }) {
           <button
             onClick={onAbort}
             className="group ml-4 px-3.5 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-600 dark:text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 rounded-full transition-all duration-300 flex items-center gap-1.5 shrink-0 text-xs font-bold uppercase tracking-wider"
-            title="Cancel Generation"
-            aria-label="Cancel Generation"
+            title="Abort Generation"
+            aria-label="Abort Generation"
           >
             <svg className="w-3.5 h-3.5 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

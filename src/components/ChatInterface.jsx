@@ -2,7 +2,7 @@
  * ChatInterface.jsx - Modularized Chat Component with Session Protection Integration
  */
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -186,6 +186,13 @@ function ChatInterface({
   });
 
   // Effects
+  
+  // Deterministic Scroll to Bottom when messages change (e.g. after history load)
+  useLayoutEffect(() => {
+    if (autoScrollToBottom && chatMessages.length > 0 && !isUserScrolledUp) {
+      scrollToBottom(true);
+    }
+  }, [chatMessages, autoScrollToBottom, scrollToBottom, isUserScrolledUp]);
 
   useEffect(() => {
     if (selectedProject) {

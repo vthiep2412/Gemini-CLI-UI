@@ -152,6 +152,7 @@ function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
     >
       <button
         onClick={() => { onRename(item); onClose(); }}
+        data-rename-action="true"
         className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-white/10 rounded-md transition-colors text-left"
       >
         <Pencil className="w-3.5 h-3.5 opacity-60" /> Rename
@@ -159,6 +160,7 @@ function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
       <div className="h-px bg-white/5 my-1" />
       <button
         onClick={() => { onDelete(item); onClose(); }}
+        data-rename-action="true"
         className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium hover:bg-red-500/20 text-red-400 rounded-md transition-colors text-left"
       >
         <Trash2 className="w-3.5 h-3.5 opacity-60" /> Delete

@@ -53,12 +53,7 @@ export const useChatHistory = ({
             // Set the converted messages directly in one stroke
             setChatMessages(converted);
 
-            if (autoScrollToBottom) {
-              // Ensure we wait for DOM rendering after state change
-              requestAnimationFrame(() => {
-                setTimeout(() => scrollToBottom('instant'), 50);
-              });
-            }
+            // Scrolling is now handled deterministically by ChatInterface using useLayoutEffect
           } catch (error) {
             if (error.name === 'AbortError') return;
             

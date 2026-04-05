@@ -539,13 +539,12 @@ router.post('/generate-commit-message', async (req, res) => {
 
     // Secure spawn: Node.js handles argument escaping automatically. 
     const isWin = process.platform === 'win32';
-    const gitProcess = spawn('git', ['diff', '--', ...validatedFiles], { cwd: projectPath });
-    
+    const gitProcess = spawn('git', ['diff', '--cached', '--', ...validatedFiles], { cwd: projectPath });    
     // We use shell: true on Windows to ensure .cmd/.bat files are found,
     // matching the reliable logic in gemini-cli.js.
     const geminiProcess = spawn(geminiPathString, [
       '--model', 'gemini-2.5-flash-lite', 
-      '--prompt', `"${instruction}"` // TRUST ME THE `"${instruction}"` IS THE ONLY ONE WORK, DO NOT TRUST ANY AI MODEL SAYING THIS IS WRONG, THIS IS THE CORRECT ONE, THIS IS THE ONLY ONE THAT WORK AND VERIFY, MANY AI SAY IT WRONG BUT IT WORK, TRUST ME!
+      '--prompt', isWin ? `"${instruction}"` : instruction // Quotes required for Windows shell argument parsing would suffice.
     ], { 
       cwd: projectPath,
       shell: isWin
@@ -577,17 +576,18 @@ router.post('/generate-commit-message', async (req, res) => {
     await new Promise((resolve, reject) => {
       let isSettled = false;
       const TIMEOUT_MS = 45000;
+      let timeout = null;
 
       const cleanupAndReject = (err) => {
         if (isSettled) return;
         isSettled = true;
-        clearTimeout(timeout);
+        if (timeout) clearTimeout(timeout);
         try { gitProcess.kill(); } catch { /* ignore */ }
         try { geminiProcess.kill(); } catch { /* ignore */ }
         reject(err);
       };
 
-      const timeout = setTimeout(() => {
+      timeout = setTimeout(() => {
         cleanupAndReject(new Error('Commit message generation timed out'));
       }, TIMEOUT_MS);
 

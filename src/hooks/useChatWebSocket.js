@@ -202,12 +202,16 @@ export const useChatWebSocket = ({
           setGeminiStatus(null);
           playNotificationSound();
           
-          const activeSessionId = currentSessionId || sessionStorage.getItem('pendingSessionId') || pendingSessionIdRef.current;
+          let pendingFromStorage = null;
+          try {
+            pendingFromStorage = sessionStorage.getItem('pendingSessionId');
+          } catch { /* sessionStorage unavailable */ }
+          const activeSessionId = currentSessionId || pendingFromStorage || pendingSessionIdRef.current;
           if (activeSessionId && onSessionInactive) {
             onSessionInactive(activeSessionId);
           }
           
-          const pendingSessionId = sessionStorage.getItem('pendingSessionId') || pendingSessionIdRef.current;
+          const pendingSessionId = pendingFromStorage || pendingSessionIdRef.current;
           if (pendingSessionId) {
             if (!currentSessionId && latestMessage.exitCode === 0) {
               setCurrentSessionId(pendingSessionId);

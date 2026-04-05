@@ -92,6 +92,8 @@ const ToolRenderer = ({
         <PlanTool 
           plan={input.plan}
           autoExpandTools={autoExpandTools}
+          showRawParameters={showRawParameters}
+          toolInput={toolInput}
         />
       );
     }

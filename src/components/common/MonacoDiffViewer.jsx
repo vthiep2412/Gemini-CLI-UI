@@ -109,7 +109,7 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
             }],
             { include: '@whitespace' },
             [/@symbols/, { cases: { '@default': 'operator' } }],
-            [/[{}()[\]]/, '@brackets'],
+            [/[{}()[\]<>]/, '@brackets'],
             [/\d*\.\d+([eE][-+]?\d+)?/, 'number.float'],
             [/0[xX][0-9a-fA-F]+/, 'number.hex'],
             [/\d+/, 'number'],
@@ -135,7 +135,7 @@ export default function MonacoDiffViewer({ original, modified, language = 'javas
           ],
           bracketCounting: [[/\{/, 'delimiter.bracket', '@push'], [/\}/, 'delimiter.bracket', '@pop'], { include: 'root' }],
         },
-        symbols: /[=!~?:&|+\-*/^%]+/,
+        symbols: /[=!~?:&|+\-*/^%<>]+/,
         escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
       });
     });

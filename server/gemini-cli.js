@@ -101,35 +101,26 @@ async function spawnGemini(command, options = {}, ws) {
   }
 
   // Add MCP config flag only if MCP servers are configured
+  // Check for MCP config in ~/.gemini.json
+  const geminiConfigPath = path.join(os.homedir(), '.gemini.json');
+
   try {
-    // Check for MCP config in ~/.gemini.json
-    const geminiConfigPath = path.join(os.homedir(), '.gemini.json');
+    if (fs.existsSync(geminiConfigPath)) {
+      const geminiConfig = JSON.parse(await fsPromises.readFile(geminiConfigPath, 'utf8'));
 
-    try {
-      await fsPromises.access(geminiConfigPath);
-      try {
-        const geminiConfig = JSON.parse(await fsPromises.readFile(geminiConfigPath, 'utf8'));
+      // Check global MCP servers
+      const hasGlobalServers = geminiConfig.mcpServers && Object.keys(geminiConfig.mcpServers).length > 0;
+      
+      // Check project-specific MCP servers using the already computed workingDir
+      const projectConfig = geminiConfig.geminiProjects && geminiConfig.geminiProjects[workingDir];
+      const hasProjectServers = projectConfig && projectConfig.mcpServers && Object.keys(projectConfig.mcpServers).length > 0;
 
-        // Check global MCP servers
-        const hasGlobalServers = geminiConfig.mcpServers && Object.keys(geminiConfig.mcpServers).length > 0;
-        
-        // Check project-specific MCP servers using the already computed workingDir
-        const projectConfig = geminiConfig.geminiProjects && geminiConfig.geminiProjects[workingDir];
-        const hasProjectServers = projectConfig && projectConfig.mcpServers && Object.keys(projectConfig.mcpServers).length > 0;
-
-        if (hasGlobalServers || hasProjectServers) {
-          args.push('--mcp-config', geminiConfigPath);
-        }
-      } catch (err) { 
-        console.warn("Caught suppressed error, MCP config check failed:", err.message); 
+      if (hasGlobalServers || hasProjectServers) {
+        args.push('--mcp-config', geminiConfigPath);
       }
-    } catch (error) {
-      // If there's any error checking for MCP configs, don't add the flag
-      console.warn("Caught suppressed error, MCP config check failed:", error.message);
     }
-  } catch (error) {
-    // If there's any error checking for MCP configs, don't add the flag
-    console.warn("Caught suppressed error, MCP config check failed:", error.message);
+  } catch (err) { 
+    console.warn("Caught suppressed error, MCP config check failed:", err.message); 
   }
 
   // Add model for all sessions (both new and resumed)
