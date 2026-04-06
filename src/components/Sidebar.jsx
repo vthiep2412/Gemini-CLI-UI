@@ -17,15 +17,18 @@ import { api } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCurrentTime } from '../hooks/useCurrentTime';
 
-const SessionTimeTracker = React.memo(({ session, children }) => {
-  const currentTime = useCurrentTime();
-  const sessionDate = new Date(session.lastActivity);
-  const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
-  const isActive = diffInMinutes < 10;
-
-  return children(isActive, currentTime);
-});
-SessionTimeTracker.displayName = 'SessionTimeTracker';
+// Touch handler to prevent double-tap issues on iPad (only for buttons, not scroll areas)
+const handleTouchClick = (callback) => {
+  return (e) => {
+    // Allow scrollable areas to be scrolled
+    if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
+      return;
+    }
+    // Prevent double invocation
+    e.preventDefault();
+    callback();
+  };
+};
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -52,6 +55,202 @@ const formatTimeAgo = (dateString, currentTime) => {
   if (diffInDays < 7) return `${diffInDays} days ago`;
   return date.toLocaleDateString();
 };
+
+// ⚡ Bolt Optimization: Extracted SessionListItem to module scope and wrapped with React.memo
+// This prevents the entire session list from re-rendering when the parent Sidebar state changes
+// (e.g., when a user types in the search bar or another session updates), saving significant CPU cycles.
+const SessionListItem = React.memo(({
+  session,
+  project,
+  isSelected,
+  isEditing,
+  onSessionSelect,
+  onSessionDelete,
+  onSessionUpdate,
+  setEditingSession
+}) => {
+  const currentTime = useCurrentTime();
+  const sessionDate = new Date(session.lastActivity);
+  const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
+  const isActive = diffInMinutes < 10;
+
+  // ⚡ Bolt Optimization: Localized editing state
+  // Moving the text input state into the individual list item prevents re-rendering
+  // the entire Sidebar component on every keystroke while editing a session name.
+  const [localEditingName, setLocalEditingName] = useState(session.summary || 'New Session');
+
+  // Reset local state when editing begins
+  useEffect(() => {
+    if (isEditing) {
+      setLocalEditingName(session.summary || 'New Session');
+    }
+  }, [isEditing, session.summary]);
+
+  return (
+    <div className="group relative">
+      {/* Active session indicator dot */}
+      {isActive && (
+        <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        </div>
+      )}
+      {/* Mobile Session Item */}
+      <div className="md:hidden">
+        <div
+          className={cn(
+            "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
+            isSelected ? "bg-primary/5 border-primary/20" :
+            isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
+          )}
+          onClick={() => onSessionSelect(project, session)}
+          onTouchEnd={handleTouchClick(() => onSessionSelect(project, session))}
+        >
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-5 h-5 rounded-md flex items-center justify-center shrink-0",
+              isSelected ? "bg-primary/10" : "bg-muted/50"
+            )}>
+              <MessageSquare className={cn(
+                "w-3 h-3",
+                isSelected ? "text-primary" : "text-muted-foreground"
+              )} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate text-foreground">
+                {session.summary || 'New Session'}
+              </div>
+              <div className="flex items-center gap-1 mt-0.5">
+                <Clock className="w-2.5 h-2.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {formatTimeAgo(session.lastActivity, currentTime)}
+                </span>
+                {session.messageCount > 0 && (
+                  <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
+                    {session.messageCount}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            {/* Mobile delete button */}
+            <button
+              className="w-5 h-5 rounded-md bg-red-50 dark:bg-red-900/20 flex items-center justify-center active:scale-95 transition-transform opacity-70 ml-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSessionDelete(project.name, session.id);
+              }}
+              onTouchEnd={handleTouchClick(() => onSessionDelete(project.name, session.id))}
+            >
+              <Trash2 className="w-2.5 h-2.5 text-red-600 dark:text-red-400" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Session Item */}
+      <div className="hidden md:block">
+        <Button
+          variant="ghost"
+          className={cn(
+            "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent/50 transition-colors duration-200",
+            isSelected && "bg-accent text-accent-foreground"
+          )}
+          onClick={() => onSessionSelect(project, session)}
+          onTouchEnd={handleTouchClick(() => onSessionSelect(project, session))}
+        >
+          <div className="flex items-start gap-2 min-w-0 w-full">
+            <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate text-foreground">
+                {session.summary || 'New Session'}
+              </div>
+              <div className="flex items-center gap-1 mt-0.5">
+                <Clock className="w-2.5 h-2.5 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">
+                  {formatTimeAgo(session.lastActivity, currentTime)}
+                </span>
+                {session.messageCount > 0 && (
+                  <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
+                    {session.messageCount}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </Button>
+        {/* Desktop hover buttons */}
+        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+          {isEditing ? (
+            <>
+              <input
+                type="text"
+                value={localEditingName}
+                onChange={(e) => setLocalEditingName(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') {
+                    onSessionUpdate(project.name, session.id, localEditingName);
+                  } else if (e.key === 'Escape') {
+                    setEditingSession(null);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-32 px-2 py-1 text-xs border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                autoFocus
+              />
+              <button
+                className="w-6 h-6 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSessionUpdate(project.name, session.id, localEditingName);
+                }}
+                title="Save"
+              >
+                <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+              </button>
+              <button
+                className="w-6 h-6 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingSession(null);
+                }}
+                title="Cancel"
+              >
+                <X className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Edit button */}
+              <button
+                className="w-6 h-6 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingSession(session.id);
+                }}
+                title="Manually edit session name"
+              >
+                <Edit2 className="w-3 h-3 text-gray-600 dark:text-gray-400" />
+              </button>
+              {/* Delete button */}
+              <button
+                className="w-6 h-6 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded flex items-center justify-center"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSessionDelete(project.name, session.id);
+                }}
+                title="Delete this session permanently"
+              >
+                <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+SessionListItem.displayName = 'SessionListItem';
 
 function Sidebar({ 
   projects, 
@@ -82,7 +281,6 @@ function Sidebar({
   const [projectSortOrder, setProjectSortOrder] = useState('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
-  const [editingSessionName, setEditingSessionName] = useState('');
   // const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -97,19 +295,6 @@ function Sidebar({
       return new Set();
     }
   });
-
-  // Touch handler to prevent double-tap issues on iPad (only for buttons, not scroll areas)
-  const handleTouchClick = (callback) => {
-    return (e) => {
-      // Allow scrollable areas to be scrolled
-      if (e.target.closest('.overflow-y-auto') || e.target.closest('[data-scroll-container]')) {
-        return;
-      }
-      // Prevent double invocation
-      e.preventDefault();
-      callback();
-    };
-  };
 
   // Clear additional sessions when projects list changes (e.g., after refresh)
   useEffect(() => {
@@ -260,6 +445,14 @@ function Sidebar({
     });
   }, [projects, isProjectStarred, projectSortOrder, getProjectLastActivity]);
 
+  // ⚡ Bolt Optimization: Stabilized session select callback
+  // Wrapping this in useCallback prevents inline arrow functions from causing
+  // the React.memo inside SessionListItem to fail comparison on every Sidebar render.
+  const handleSessionItemSelect = useCallback((project, session) => {
+    onProjectSelect(project);
+    onSessionSelect(session);
+  }, [onProjectSelect, onSessionSelect]);
+
   const startEditing = (project) => {
     setEditingProject(project.name);
     setEditingName(project.displayName);
@@ -292,7 +485,7 @@ function Sidebar({
     setEditingName('');
   };
 
-  const deleteSession = async (projectName, sessionId) => {
+  const deleteSession = useCallback(async (projectName, sessionId) => {
     if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
       return;
     }
@@ -313,7 +506,7 @@ function Sidebar({
       console.error('Error deleting session:', error);
       alert('Error deleting session. Please try again.');
     }
-  };
+  }, [onSessionDelete]);
 
   const deleteProject = async (projectName) => {
     if (!confirm('Are you sure you want to delete this empty project? This action cannot be undone.')) {
@@ -1018,179 +1211,17 @@ function Sidebar({
                         </div>
                       ) : (
                         allSessions.map((session) => (
-                          <SessionTimeTracker key={session.id} session={session}>
-                            {(isActive, currentTime) => (
-                              <div key={session.id} className="group relative">
-                            {/* Active session indicator dot */}
-                            {isActive && (
-                              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                              </div>
-                            )}
-                            {/* Mobile Session Item */}
-                            <div className="md:hidden">
-                              <div
-                                className={cn(
-                                  "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
-                                  selectedSession?.id === session.id ? "bg-primary/5 border-primary/20" :
-                                  isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
-                                )}
-                                onClick={() => {
-                                  onProjectSelect(project);
-                                  onSessionSelect(session);
-                                }}
-                                onTouchEnd={handleTouchClick(() => {
-                                  onProjectSelect(project);
-                                  onSessionSelect(session);
-                                })}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className={cn(
-                                    "w-5 h-5 rounded-md flex items-center justify-center shrink-0",
-                                    selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
-                                  )}>
-                                    <MessageSquare className={cn(
-                                      "w-3 h-3",
-                                      selectedSession?.id === session.id ? "text-primary" : "text-muted-foreground"
-                                    )} />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-xs font-medium truncate text-foreground">
-                                      {session.summary || 'New Session'}
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Clock className="w-2.5 h-2.5 text-muted-foreground" />
-                                      <span className="text-xs text-muted-foreground">
-                                        {formatTimeAgo(session.lastActivity, currentTime)}
-                                      </span>
-                                      {session.messageCount > 0 && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
-                                          {session.messageCount}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {/* Mobile delete button */}
-                                  <button
-                                    className="w-5 h-5 rounded-md bg-red-50 dark:bg-red-900/20 flex items-center justify-center active:scale-95 transition-transform opacity-70 ml-1"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteSession(project.name, session.id);
-                                    }}
-                                    onTouchEnd={handleTouchClick(() => deleteSession(project.name, session.id))}
-                                  >
-                                    <Trash2 className="w-2.5 h-2.5 text-red-600 dark:text-red-400" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Desktop Session Item */}
-                            <div className="hidden md:block">
-                              <Button
-                                variant="ghost"
-                                className={cn(
-                                  "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent/50 transition-colors duration-200",
-                                  selectedSession?.id === session.id && "bg-accent text-accent-foreground"
-                                )}
-                                onClick={() => onSessionSelect(session)}
-                                onTouchEnd={handleTouchClick(() => onSessionSelect(session))}
-                              >
-                                <div className="flex items-start gap-2 min-w-0 w-full">
-                                  <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="text-xs font-medium truncate text-foreground">
-                                      {session.summary || 'New Session'}
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Clock className="w-2.5 h-2.5 text-muted-foreground" />
-                                      <span className="text-xs text-muted-foreground">
-                                        {formatTimeAgo(session.lastActivity, currentTime)}
-                                      </span>
-                                      {session.messageCount > 0 && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
-                                          {session.messageCount}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </Button>
-                              {/* Desktop hover buttons */}
-                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                                {editingSession === session.id ? (
-                                  <>
-                                    <input
-                                      type="text"
-                                      value={editingSessionName}
-                                      onChange={(e) => setEditingSessionName(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        e.stopPropagation();
-                                        if (e.key === 'Enter') {
-                                          onSessionUpdate(project.name, session.id, editingSessionName);
-                                        } else if (e.key === 'Escape') {
-                                          setEditingSession(null);
-                                          setEditingSessionName('');
-                                        }
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="w-32 px-2 py-1 text-xs border border-border rounded bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                                      autoFocus
-                                    />
-                                    <button
-                                      className="w-6 h-6 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded flex items-center justify-center"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        onSessionUpdate(project.name, session.id, editingSessionName);
-                                      }}
-                                      title="Save"
-                                    >
-                                      <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
-                                    </button>
-                                    <button
-                                      className="w-6 h-6 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded flex items-center justify-center"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingSession(null);
-                                        setEditingSessionName('');
-                                      }}
-                                      title="Cancel"
-                                    >
-                                      <X className="w-3 h-3 text-gray-600 dark:text-gray-400" />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    {/* Edit button */}
-                                    <button
-                                      className="w-6 h-6 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded flex items-center justify-center"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingSession(session.id);
-                                        setEditingSessionName(session.summary || 'New Session');
-                                      }}
-                                      title="Manually edit session name"
-                                    >
-                                      <Edit2 className="w-3 h-3 text-gray-600 dark:text-gray-400" />
-                                    </button>
-                                    {/* Delete button */}
-                                    <button
-                                      className="w-6 h-6 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 rounded flex items-center justify-center"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteSession(project.name, session.id);
-                                      }}
-                                      title="Delete this session permanently"
-                                    >
-                                      <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                            )}
-                          </SessionTimeTracker>
+                          <SessionListItem
+                            key={session.id}
+                            session={session}
+                            project={project}
+                            isSelected={selectedSession?.id === session.id}
+                            isEditing={editingSession === session.id}
+                            onSessionSelect={handleSessionItemSelect}
+                            onSessionDelete={deleteSession}
+                            onSessionUpdate={onSessionUpdate}
+                            setEditingSession={setEditingSession}
+                          />
                         ))
                       )}
 
