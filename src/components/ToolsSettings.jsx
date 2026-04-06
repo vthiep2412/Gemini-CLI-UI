@@ -154,17 +154,14 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('general');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
   const [notificationSoundType, setNotificationSoundType] = useState('chime');
   const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
   const [showDisallowedDropdown, setShowDisallowedDropdown] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showSoundDropdown, setShowSoundDropdown] = useState(false);
   const allowedDropdownRef = useRef(null);
   const disallowedDropdownRef = useRef(null);
-  const modelDropdownRef = useRef(null);
   const sortDropdownRef = useRef(null);
   const soundDropdownRef = useRef(null);
   
@@ -275,11 +272,6 @@ function ToolsSettings({ isOpen, onClose }) {
   ];
   
   // Available Gemini models (tested and verified)
-  const availableModels = [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient latest model (Recommended)' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most advanced model (Note: May have quota limits)' }
-  ];
-
   const availableSorts = [
     { value: 'name', label: 'Alphabetical', description: 'Sort projects by name' },
     { value: 'date', label: 'Recent Activity', description: 'Most recent projects first' }
@@ -518,7 +510,6 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
-        setSelectedModel(settings.selectedModel || 'gemini-2.5-flash');
         setEnableNotificationSound(settings.enableNotificationSound || false);
         setNotificationSoundType(settings.notificationSoundType || 'chime');
       } else {
@@ -551,12 +542,13 @@ function ToolsSettings({ isOpen, onClose }) {
         toggleDarkMode();
       }
 
+      const currentSettings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
       const settings = {
         allowedTools,
         disallowedTools,
         skipPermissions,
         projectSortOrder,
-        selectedModel,
+        selectedModel: currentSettings.selectedModel || 'gemini-2.5-flash',
         enableNotificationSound,
         notificationSoundType,
         lastUpdated: new Date().toISOString()
@@ -785,7 +777,72 @@ function ToolsSettings({ isOpen, onClose }) {
 
   const renderGeneralContent = () => (
     <div className="space-y-8">
-      <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
+            {/* Behavior Settings */}
+      <div className="space-y-4 text-left">
+        <div className="flex items-center gap-2 text-foreground">
+          <Volume2 className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Notifications</h3>
+        </div>
+        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all shadow-sm">
+          <div>
+            <div className="text-sm font-medium text-foreground">Notification Sound</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Play sound when Gemini responds</div>
+          </div>
+          <div className="flex items-center gap-3">
+            {enableNotificationSound && (
+              <>
+                <div className="w-32 sm:w-40">
+                  <ModernSelect
+                    id="sound-select"
+                    value={notificationSoundType}
+                    onChange={(val) => {
+                      setNotificationSoundType(val);
+                      autoSaveNotifications(enableNotificationSound, val);
+                      import('../utils/notificationSound').then(({ playNotificationSound }) => {
+                        playNotificationSound();
+                      });
+                    }}
+                    options={availableSounds}
+                    placeholder="Sound"
+                    isOpen={showSoundDropdown}
+                    setIsOpen={setShowSoundDropdown}
+                    dropdownRef={soundDropdownRef}
+                    className="scale-90 origin-right"
+                    dropdownClassName="right-0 w-48 sm:w-64"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    const { playNotificationSound } = await import('../utils/notificationSound');
+                    autoSaveNotifications(true, notificationSoundType);
+                    playNotificationSound();
+                  }}
+                  className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                >
+                  <Play className="w-5 h-5" />
+                </button>
+              </>
+            )}
+            <Switch
+              checked={enableNotificationSound}
+              onChange={(val) => {
+                setEnableNotificationSound(val);
+                autoSaveNotifications(val, notificationSoundType);
+              }}
+              thumbContent={<Volume2 className={`w-2.5 h-2.5 transition-colors ${enableNotificationSound ? 'text-blue-600' : 'text-gray-400'}`} />}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Permission Settings */}
+      <div className="space-y-4 text-left">
+        <div className="flex items-center gap-2 text-foreground">
+          <Shield className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
+        </div>
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
+
           <div>
             <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
             <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
@@ -797,6 +854,7 @@ function ToolsSettings({ isOpen, onClose }) {
             thumbContent={<Zap className={`w-2.5 h-2.5 transition-colors ${skipPermissions ? 'text-orange-600' : 'text-gray-400'}`} />}
           />
         </div>
+      </div>
     </div>
   );
 

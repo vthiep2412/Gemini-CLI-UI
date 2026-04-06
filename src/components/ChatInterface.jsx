@@ -16,6 +16,15 @@ import { useChatHistory } from '../hooks/useChatHistory';
 
 const DEFAULT_PERMISSION_MODE = 'default';
 
+const MODELS = [
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' }
+];
+
+
+
 // ImageAttachment component for displaying image previews
 const ImageAttachment = ({ file, onRemove, uploadProgress, error }) => {
   const [preview, setPreview] = useState(null);
@@ -89,24 +98,27 @@ function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
 
+  const [isYoloMode, setIsYoloMode] = useState(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+      return settings.skipPermissions || false;
+    } catch (e) {
+      return false;
+    }
+  });
+
   const [selectedModel, setSelectedModel] = useState(() => {
     try {
       const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
-      return settings.selectedModel || 'gemini-3.1-pro';
+      return settings.selectedModel || 'gemini-2.5-flash';
     } catch (e) { 
-      return 'gemini-3.1-pro';
+      return 'gemini-2.5-flash';
     }
   });
 
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelDropdownRef = useRef(null);
 
-  const MODELS = [
-    { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro' },
-    { id: 'gemini-3-flash', name: 'Gemini 3 Flash' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' }
-  ];
 
   const handleModelSelect = (modelId) => {
     setSelectedModel(modelId);
@@ -115,7 +127,14 @@ function ChatInterface({
       const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
       settings.selectedModel = modelId;
       localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
-    } catch(e) { console.error('Failed to save model preference'); }
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'gemini-tools-settings',
+        newValue: JSON.stringify(settings),
+        oldValue: localStorage.getItem('gemini-tools-settings'),
+        storageArea: localStorage,
+        url: window.location.href
+      }));
+    } catch(e) { console.error('Failed to save model preference', e); }
   };
 
   useEffect(() => {
@@ -487,6 +506,27 @@ function ChatInterface({
     if (currentSessionId && canAbortSession) sendMessage({ type: 'abort-session', sessionId: currentSessionId });
   };
 
+
+  const getFirstName = () => {
+    try {
+      const authStorage = localStorage.getItem('geminicliui_auth');
+      if (authStorage) {
+        const authData = JSON.parse(authStorage);
+        if (authData.user && authData.user.username) {
+            return authData.user.username.charAt(0).toUpperCase() + authData.user.username.slice(1).split('@')[0];
+        }
+      }
+    } catch(e) { console.error('Failed to get auth name from local storage:', e); }
+    return 'there';
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   if (!selectedProject) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -516,7 +556,7 @@ function ChatInterface({
           ) : chatMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full -mt-20">
                 <h1 className="text-4xl font-bold mb-3 text-white tracking-tight">
-                  Good evening, Ben
+                  {getGreeting()}, {getFirstName()}
                 </h1>
                 <p className="text-[#64748b] text-lg">
                   What would you like to build today?
@@ -585,12 +625,14 @@ function ChatInterface({
                           : 'hover:bg-white/5 border-l-2 border-transparent'
                       }`}
                       onClick={() => selectFile(file)}
+                      title={file.path}
                     >
                       <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                       <div className="flex flex-col overflow-hidden">
                         <span className="text-sm text-gray-200 truncate font-medium">{file.name}</span>
+                        <span className="text-[10px] text-gray-500 truncate mt-0.5">{file.path}</span>
                       </div>
                     </div>
                   ))}
@@ -641,7 +683,9 @@ function ChatInterface({
                 <button
                   type="button"
                   className="p-2 text-gray-400 hover:text-gray-200 hover:bg-white/5 rounded-lg transition-colors"
-                  title="Voice Input"
+                  title="Voice Input (Coming Soon)"
+                  disabled
+                  onClick={() => alert("Voice input coming soon!")}
                 >
                   <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
