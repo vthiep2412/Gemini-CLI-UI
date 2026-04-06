@@ -154,17 +154,14 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('general');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
   const [notificationSoundType, setNotificationSoundType] = useState('chime');
   const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
   const [showDisallowedDropdown, setShowDisallowedDropdown] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showSoundDropdown, setShowSoundDropdown] = useState(false);
   const allowedDropdownRef = useRef(null);
   const disallowedDropdownRef = useRef(null);
-  const modelDropdownRef = useRef(null);
   const sortDropdownRef = useRef(null);
   const soundDropdownRef = useRef(null);
   
@@ -235,9 +232,6 @@ function ToolsSettings({ isOpen, onClose }) {
       if (disallowedDropdownRef.current && !disallowedDropdownRef.current.contains(event.target)) {
         setShowDisallowedDropdown(false);
       }
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
-        setShowModelDropdown(false);
-      }
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target)) {
         setShowSortDropdown(false);
       }
@@ -275,11 +269,6 @@ function ToolsSettings({ isOpen, onClose }) {
   ];
   
   // Available Gemini models (tested and verified)
-  const availableModels = [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient latest model (Recommended)' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most advanced model (Note: May have quota limits)' }
-  ];
-
   const availableSorts = [
     { value: 'name', label: 'Alphabetical', description: 'Sort projects by name' },
     { value: 'date', label: 'Recent Activity', description: 'Most recent projects first' }
@@ -518,7 +507,6 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
-        setSelectedModel(settings.selectedModel || 'gemini-2.5-flash');
         setEnableNotificationSound(settings.enableNotificationSound || false);
         setNotificationSoundType(settings.notificationSoundType || 'chime');
       } else {
@@ -551,25 +539,29 @@ function ToolsSettings({ isOpen, onClose }) {
         toggleDarkMode();
       }
 
+      const rawOldSettings = localStorage.getItem('gemini-tools-settings');
+      const currentSettings = JSON.parse(rawOldSettings || '{}');
       const settings = {
         allowedTools,
         disallowedTools,
         skipPermissions,
         projectSortOrder,
-        selectedModel,
+        selectedModel: currentSettings.selectedModel || 'gemini-2.5-flash',
         enableNotificationSound,
         notificationSoundType,
         lastUpdated: new Date().toISOString()
       };
       
+      const newSettingsStr = JSON.stringify(settings);
+
       // Save to localStorage
-      localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+      localStorage.setItem('gemini-tools-settings', newSettingsStr);
       
       // Trigger storage event for current window
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'gemini-tools-settings',
-        newValue: JSON.stringify(settings),
-        oldValue: localStorage.getItem('gemini-tools-settings'),
+        newValue: newSettingsStr,
+        oldValue: rawOldSettings,
         storageArea: localStorage,
         url: window.location.href
       }));
@@ -599,12 +591,16 @@ function ToolsSettings({ isOpen, onClose }) {
         lastUpdated: new Date().toISOString()
       };
       
-      localStorage.setItem('gemini-tools-settings', JSON.stringify(updatedSettings));
+      const newSettingsStr = JSON.stringify(updatedSettings);
+      localStorage.setItem('gemini-tools-settings', newSettingsStr);
       
       // Trigger storage event so the rest of the app picks it up immediately
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'gemini-tools-settings',
-        newValue: JSON.stringify(updatedSettings)
+        newValue: newSettingsStr,
+        oldValue: savedSettings,
+        storageArea: localStorage,
+        url: window.location.href
       }));
     } catch {
       // Silently fail for auto-save
@@ -785,30 +781,7 @@ function ToolsSettings({ isOpen, onClose }) {
 
   const renderGeneralContent = () => (
     <div className="space-y-8">
-      {/* Model Selection */}
-      <div className="space-y-4 text-left">
-        <div className="flex items-center gap-2 text-foreground">
-          <Zap className="w-4 h-4 text-cyan-500" />
-          <h3 className="text-sm font-bold uppercase tracking-wider">Gemini Model</h3>
-        </div>
-        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 space-y-4 transition-all hover:bg-muted/70 shadow-sm">
-          <ModernSelect
-            id="model-select"
-            value={selectedModel}
-            onChange={setSelectedModel}
-            options={availableModels}
-            placeholder="Select Model"
-            isOpen={showModelDropdown}
-            setIsOpen={setShowModelDropdown}
-            dropdownRef={modelDropdownRef}
-          />
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {availableModels.find(m => m.value === selectedModel)?.description}
-          </p>
-        </div>
-      </div>
-
-      {/* Behavior Settings */}
+            {/* Behavior Settings */}
       <div className="space-y-4 text-left">
         <div className="flex items-center gap-2 text-foreground">
           <Volume2 className="w-4 h-4 text-blue-500" />
@@ -873,6 +846,7 @@ function ToolsSettings({ isOpen, onClose }) {
           <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
+
           <div>
             <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
             <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
