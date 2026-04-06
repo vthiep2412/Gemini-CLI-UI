@@ -131,12 +131,12 @@ function ChatInterface({
       const newSettingsStr = JSON.stringify(settings);
       localStorage.setItem('gemini-tools-settings', newSettingsStr);
 
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'gemini-tools-settings',
-        newValue: newSettingsStr,
-        oldValue: rawSettings,
-        storageArea: localStorage,
-        url: window.location.href
+      window.dispatchEvent(new CustomEvent('settings-sync', {
+        detail: {
+          key: 'gemini-tools-settings',
+          newValue: newSettingsStr,
+          oldValue: rawSettings
+        }
       }));
     } catch(e) { console.error('Failed to save model preference', e); }
   };
@@ -266,7 +266,7 @@ function ChatInterface({
       }
     };
     checkSettings();
-    
+
     const handleStorageChange = (e) => {
       if (e.key === 'gemini-tools-settings') {
         checkSettings();
@@ -278,13 +278,21 @@ function ChatInterface({
         }]);
       }
     };
-    
+
+    const handleSettingsSync = (e) => {
+      if (e.detail?.key === 'gemini-tools-settings') {
+        checkSettings();
+      }
+    };
+
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('settings-sync', handleSettingsSync);
     const handleFocus = () => checkSettings();
     window.addEventListener('focus', handleFocus);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('settings-sync', handleSettingsSync);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
@@ -392,7 +400,7 @@ function ChatInterface({
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((input.trim() === '' && attachedImages.length === 0) || isLoading) return;
     
     let uploadedImages = [];
     if (attachedImages.length > 0) {
@@ -731,10 +739,10 @@ function ChatInterface({
 
                 <button
                   type="button"
-                  disabled={(!input.trim() && attachedImages.length === 0) || isLoading}
+                  disabled={(input.trim() === '' && attachedImages.length === 0) || isLoading}
                   onClick={handleSubmit}
                   className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                    (!input.trim() && attachedImages.length === 0) || isLoading
+                    (input.trim() === '' && attachedImages.length === 0) || isLoading
                       ? 'bg-white/10 text-gray-500'
                       : 'bg-[#3b82f6] text-white hover:bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]'
                   }`}
