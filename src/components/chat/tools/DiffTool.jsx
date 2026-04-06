@@ -1,5 +1,5 @@
 import React from 'react';
-import { createDiff } from '../../../utils/diff';
+import MonacoDiffViewer from '../../common/MonacoDiffViewer';
 
 const DiffTool = ({ 
   input, 
@@ -63,26 +63,9 @@ const DiffTool = ({
               {input.content !== undefined ? 'New File' : 'Diff'}
             </span>
           </div>
-          <div className="text-xs font-mono">
-            {createDiff(oldStr, newStr).map((diffLine, i) => (
-              <div key={i} className="flex">
-                <span className={`w-8 text-center border-r ${
-                  diffLine.type === 'removed' 
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800'
-                    : 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800'
-                }`}>
-                  {diffLine.type === 'removed' ? '-' : '+'}
-                </span>
-                <span className={`px-2 py-0.5 flex-1 whitespace-pre-wrap ${
-                  diffLine.type === 'removed'
-                    ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-                    : 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                }`}>
-                  {diffLine.content}
-                </span>
-              </div>
-            ))}
-          </div>
+          <div className="text-xs font-mono h-[300px]">
+          <MonacoDiffViewer original={oldStr} modified={newStr} height="100%" />
+        </div>
         </div>
         {showRawParameters && (
           <details className="mt-2" open={autoExpandTools}>

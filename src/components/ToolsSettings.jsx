@@ -785,94 +785,7 @@ function ToolsSettings({ isOpen, onClose }) {
 
   const renderGeneralContent = () => (
     <div className="space-y-8">
-      {/* Model Selection */}
-      <div className="space-y-4 text-left">
-        <div className="flex items-center gap-2 text-foreground">
-          <Zap className="w-4 h-4 text-cyan-500" />
-          <h3 className="text-sm font-bold uppercase tracking-wider">Gemini Model</h3>
-        </div>
-        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 space-y-4 transition-all hover:bg-muted/70 shadow-sm">
-          <ModernSelect
-            id="model-select"
-            value={selectedModel}
-            onChange={setSelectedModel}
-            options={availableModels}
-            placeholder="Select Model"
-            isOpen={showModelDropdown}
-            setIsOpen={setShowModelDropdown}
-            dropdownRef={modelDropdownRef}
-          />
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            {availableModels.find(m => m.value === selectedModel)?.description}
-          </p>
-        </div>
-      </div>
-
-      {/* Behavior Settings */}
-      <div className="space-y-4 text-left">
-        <div className="flex items-center gap-2 text-foreground">
-          <Volume2 className="w-4 h-4 text-blue-500" />
-          <h3 className="text-sm font-bold uppercase tracking-wider">Notifications</h3>
-        </div>
-        <div className="bg-muted/60 border border-border/80 rounded-xl p-4 flex items-center justify-between hover:bg-muted/70 transition-all shadow-sm">
-          <div>
-            <div className="text-sm font-medium text-foreground">Notification Sound</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Play sound when Gemini responds</div>
-          </div>
-          <div className="flex items-center gap-3">
-            {enableNotificationSound && (
-              <>
-                <div className="w-32 sm:w-40">
-                  <ModernSelect
-                    id="sound-select"
-                    value={notificationSoundType}
-                    onChange={(val) => {
-                      setNotificationSoundType(val);
-                      autoSaveNotifications(enableNotificationSound, val);
-                      import('../utils/notificationSound').then(({ playNotificationSound }) => {
-                        playNotificationSound();
-                      });
-                    }}
-                    options={availableSounds}
-                    placeholder="Sound"
-                    isOpen={showSoundDropdown}
-                    setIsOpen={setShowSoundDropdown}
-                    dropdownRef={soundDropdownRef}
-                    className="scale-90 origin-right"
-                    dropdownClassName="right-0 w-48 sm:w-64"
-                  />
-                </div>
-                <button
-                  onClick={async () => {
-                    const { playNotificationSound } = await import('../utils/notificationSound');
-                    autoSaveNotifications(true, notificationSoundType);
-                    playNotificationSound();
-                  }}
-                  className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                >
-                  <Play className="w-5 h-5" />
-                </button>
-              </>
-            )}
-            <Switch
-              checked={enableNotificationSound}
-              onChange={(val) => {
-                setEnableNotificationSound(val);
-                autoSaveNotifications(val, notificationSoundType);
-              }}
-              thumbContent={<Volume2 className={`w-2.5 h-2.5 transition-colors ${enableNotificationSound ? 'text-blue-600' : 'text-gray-400'}`} />}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Permission Settings */}
-      <div className="space-y-4 text-left">
-        <div className="flex items-center gap-2 text-foreground">
-          <Shield className="w-4 h-4 text-orange-500" />
-          <h3 className="text-sm font-bold uppercase tracking-wider">Permissions</h3>
-        </div>
-        <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
+      <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4 flex items-center justify-between hover:bg-orange-500/15 transition-all shadow-sm">
           <div>
             <div className="text-sm font-medium text-orange-600 dark:text-orange-400">YOLO Mode</div>
             <div className="text-xs text-orange-600/70 dark:text-orange-400/70 mt-0.5">Auto-approve all tool calls (High Risk)</div>
@@ -884,7 +797,6 @@ function ToolsSettings({ isOpen, onClose }) {
             thumbContent={<Zap className={`w-2.5 h-2.5 transition-colors ${skipPermissions ? 'text-orange-600' : 'text-gray-400'}`} />}
           />
         </div>
-      </div>
     </div>
   );
 
