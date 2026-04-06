@@ -232,9 +232,6 @@ function ToolsSettings({ isOpen, onClose }) {
       if (disallowedDropdownRef.current && !disallowedDropdownRef.current.contains(event.target)) {
         setShowDisallowedDropdown(false);
       }
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target)) {
-        setShowModelDropdown(false);
-      }
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target)) {
         setShowSortDropdown(false);
       }
@@ -542,7 +539,8 @@ function ToolsSettings({ isOpen, onClose }) {
         toggleDarkMode();
       }
 
-      const currentSettings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+      const rawOldSettings = localStorage.getItem('gemini-tools-settings');
+      const currentSettings = JSON.parse(rawOldSettings || '{}');
       const settings = {
         allowedTools,
         disallowedTools,
@@ -554,14 +552,16 @@ function ToolsSettings({ isOpen, onClose }) {
         lastUpdated: new Date().toISOString()
       };
       
+      const newSettingsStr = JSON.stringify(settings);
+
       // Save to localStorage
-      localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+      localStorage.setItem('gemini-tools-settings', newSettingsStr);
       
       // Trigger storage event for current window
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'gemini-tools-settings',
-        newValue: JSON.stringify(settings),
-        oldValue: localStorage.getItem('gemini-tools-settings'),
+        newValue: newSettingsStr,
+        oldValue: rawOldSettings,
         storageArea: localStorage,
         url: window.location.href
       }));
@@ -591,12 +591,16 @@ function ToolsSettings({ isOpen, onClose }) {
         lastUpdated: new Date().toISOString()
       };
       
-      localStorage.setItem('gemini-tools-settings', JSON.stringify(updatedSettings));
+      const newSettingsStr = JSON.stringify(updatedSettings);
+      localStorage.setItem('gemini-tools-settings', newSettingsStr);
       
       // Trigger storage event so the rest of the app picks it up immediately
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'gemini-tools-settings',
-        newValue: JSON.stringify(updatedSettings)
+        newValue: newSettingsStr,
+        oldValue: savedSettings,
+        storageArea: localStorage,
+        url: window.location.href
       }));
     } catch {
       // Silently fail for auto-save

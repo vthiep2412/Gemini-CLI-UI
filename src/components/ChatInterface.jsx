@@ -124,13 +124,17 @@ function ChatInterface({
     setSelectedModel(modelId);
     setShowModelDropdown(false);
     try {
-      const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+      const rawSettings = localStorage.getItem('gemini-tools-settings');
+      const settings = JSON.parse(rawSettings || '{}');
       settings.selectedModel = modelId;
-      localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+
+      const newSettingsStr = JSON.stringify(settings);
+      localStorage.setItem('gemini-tools-settings', newSettingsStr);
+
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'gemini-tools-settings',
-        newValue: JSON.stringify(settings),
-        oldValue: localStorage.getItem('gemini-tools-settings'),
+        newValue: newSettingsStr,
+        oldValue: rawSettings,
         storageArea: localStorage,
         url: window.location.href
       }));
