@@ -27,8 +27,6 @@ function FileRow({
   isRenaming,
   onRenameSubmit,
   onRenameCancel,
-  formatFileSize, 
-  formatRelativeTime 
 }) {
   const isDir = item.type === 'directory';
   const indent = level * 18 + 12;
@@ -41,11 +39,19 @@ function FileRow({
     if (e.key === 'Escape') onRenameCancel();
   };
 
+  const handleClick = useCallback(() => {
+    if (!isRenaming) onClickItem(item);
+  }, [isRenaming, onClickItem, item]);
+
+  const handleContextMenu = useCallback((e) => {
+    onContextMenu(e, item);
+  }, [onContextMenu, item]);
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onContextMenu={(e) => onContextMenu(e, item)}
+      onContextMenu={handleContextMenu}
       className={cn(
         'flex items-center gap-2.5 py-[4.5px] pr-2 rounded-sm cursor-pointer select-none group',
         'hover:bg-(--bg-muted)/40 transition-colors duration-100',
@@ -53,7 +59,7 @@ function FileRow({
         isRenaming && 'bg-(--bg-muted)/80 ring-1 ring-(--git-accent)/50'
       )}
       style={{ paddingLeft: `${indent}px` }}
-      onClick={() => !isRenaming && onClickItem(item)}
+      onClick={handleClick}
     >
       <FileIcon filename={item.name} isFolder={isDir} isOpen={isExpanded} size={19} className="shrink-0" />
 
