@@ -28,13 +28,20 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
   const isResizing = useRef(false);
   const containerRef = useRef(null);
 
-  const handleFileSelect = useCallback(async (file) => {
-    // Check if file is already open
-    const existingFile = openFiles.find(f => f.path === file.path);
+  // Use refs to avoid stale closures in event listeners without re-binding
+  const activeFileRef = useRef(activeFile);
+  const fileContentsRef = useRef(fileContents);
+  const fileErrorsRef = useRef(fileErrors);
+  const isSavingRef = useRef(saving);
 
-    if (!existingFile) {
-      setOpenFiles(prev => [...prev, file]);
-    }
+  const handleFileSelect = useCallback(async (file) => {
+    // Check if file is already open using functional state update
+    setOpenFiles(prev => {
+      if (!prev.find(f => f.path === file.path)) {
+        return [...prev, file];
+      }
+      return prev;
+    });
 
     setActiveFile(file);
     if (isMobile) {
@@ -42,7 +49,7 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
     }
 
     // Load content if we don't have it
-    if (!fileContents[file.path]) {
+    if (!fileContentsRef.current[file.path]) {
       setFileLoading(prev => ({ ...prev, [file.path]: true }));
       try {
         const response = await api.readFile(file.projectName, file.path);
@@ -57,7 +64,7 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
         setFileLoading(prev => ({ ...prev, [file.path]: false }));
       }
     }
-  }, [openFiles, fileContents, isMobile]);
+  }, [isMobile]);
 
   // Handle files opened externally (e.g. from chat)
   useEffect(() => {
@@ -119,12 +126,6 @@ function IDETab({ selectedProject, isMobile, openFileFromChat }) {
       setFileContents(prev => ({ ...prev, [activeFile.path]: value }));
     }
   };
-
-  // Use refs to avoid stale closures in event listeners without re-binding
-  const activeFileRef = useRef(activeFile);
-  const fileContentsRef = useRef(fileContents);
-  const fileErrorsRef = useRef(fileErrors);
-  const isSavingRef = useRef(saving);
 
   useEffect(() => {
     activeFileRef.current = activeFile;
