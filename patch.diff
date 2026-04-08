@@ -1,0 +1,44 @@
+--- src/components/IDETab.jsx
++++ src/components/IDETab.jsx
+@@ -26,8 +26,16 @@
+   const isResizing = useRef(false);
+   const containerRef = useRef(null);
+
++  const fileContentsRef = useRef(fileContents);
++  const openFilesRef = useRef(openFiles);
++  const isMobileRef = useRef(isMobile);
++
++  // Keep these synced
++  openFilesRef.current = openFiles;
++  isMobileRef.current = isMobile;
++
+   const handleFileSelect = useCallback(async (file) => {
+     // Check if file is already open
+-    const existingFile = openFiles.find(f => f.path === file.path);
++    const existingFile = openFilesRef.current.find(f => f.path === file.path);
+
+     if (!existingFile) {
+@@ -37,7 +45,7 @@
+     setActiveFile(file);
+-    if (isMobile) {
++    if (isMobileRef.current) {
+       setShowEditorOnMobile(true);
+     }
+
+     // Load content if we don't have it
+-    if (!fileContents[file.path]) {
++    if (!fileContentsRef.current[file.path]) {
+       setFileLoading(prev => ({ ...prev, [file.path]: true }));
+@@ -58,7 +66,7 @@
+       }
+     }
+-  }, [openFiles, fileContents, isMobile]);
++  }, []); // Empty dependency array ensures FileTree isn't re-rendered unnecessarily
+
+   // Handle files opened externally (e.g. from chat)
+@@ -124,7 +132,6 @@
+   // Use refs to avoid stale closures in event listeners without re-binding
+   const activeFileRef = useRef(activeFile);
+-  const fileContentsRef = useRef(fileContents);
+   const fileErrorsRef = useRef(fileErrors);
+   const isSavingRef = useRef(saving);
