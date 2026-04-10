@@ -17,15 +17,42 @@ import { api } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCurrentTime } from '../hooks/useCurrentTime';
 
-const SessionTimeTracker = React.memo(({ session, children }) => {
+// Optimization: Extracted time calculation into isolated memoized leaf components.
+// This prevents the entire SessionListItem (and Sidebar) from re-rendering every minute
+// when useCurrentTime() updates.
+const SessionTimeDisplay = React.memo(({ lastActivity }) => {
   const currentTime = useCurrentTime();
-  const sessionDate = new Date(session.lastActivity);
+  return <>{formatTimeAgo(lastActivity, currentTime)}</>;
+});
+SessionTimeDisplay.displayName = 'SessionTimeDisplay';
+
+const SessionActiveDot = React.memo(({ lastActivity }) => {
+  const currentTime = useCurrentTime();
+  const sessionDate = new Date(lastActivity);
   const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
   const isActive = diffInMinutes < 10;
 
-  return children(isActive, currentTime);
+  if (!isActive) return null;
+  return (
+    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1 z-10">
+      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+    </div>
+  );
 });
-SessionTimeTracker.displayName = 'SessionTimeTracker';
+SessionActiveDot.displayName = 'SessionActiveDot';
+
+const MobileActiveStyles = React.memo(({ lastActivity }) => {
+  const currentTime = useCurrentTime();
+  const sessionDate = new Date(lastActivity);
+  const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
+  const isActive = diffInMinutes < 10;
+
+  if (!isActive) return null;
+  return (
+    <div className="absolute inset-0 border border-green-500/30 bg-green-50/5 dark:bg-green-900/5 rounded-md pointer-events-none" />
+  );
+});
+MobileActiveStyles.displayName = 'MobileActiveStyles';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -1018,22 +1045,15 @@ function Sidebar({
                         </div>
                       ) : (
                         allSessions.map((session) => (
-                          <SessionTimeTracker key={session.id} session={session}>
-                            {(isActive, currentTime) => (
                               <div key={session.id} className="group relative">
                             {/* Active session indicator dot */}
-                            {isActive && (
-                              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                              </div>
-                            )}
+                            <SessionActiveDot lastActivity={session.lastActivity} />
                             {/* Mobile Session Item */}
                             <div className="md:hidden">
                               <div
                                 className={cn(
-                                  "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
-                                  selectedSession?.id === session.id ? "bg-primary/5 border-primary/20" :
-                                  isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
+                                  "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative overflow-hidden",
+                                  selectedSession?.id === session.id ? "bg-primary/5 border-primary/20" : "border-border/30"
                                 )}
                                 onClick={() => {
                                   onProjectSelect(project);
@@ -1044,7 +1064,8 @@ function Sidebar({
                                   onSessionSelect(session);
                                 })}
                               >
-                                <div className="flex items-center gap-2">
+                                <MobileActiveStyles lastActivity={session.lastActivity} />
+                                <div className="flex items-center gap-2 relative z-10">
                                   <div className={cn(
                                     "w-5 h-5 rounded-md flex items-center justify-center shrink-0",
                                     selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
@@ -1061,7 +1082,7 @@ function Sidebar({
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <Clock className="w-2.5 h-2.5 text-muted-foreground" />
                                       <span className="text-xs text-muted-foreground">
-                                        {formatTimeAgo(session.lastActivity, currentTime)}
+                                        <SessionTimeDisplay lastActivity={session.lastActivity} />
                                       </span>
                                       {session.messageCount > 0 && (
                                         <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
@@ -1105,7 +1126,7 @@ function Sidebar({
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <Clock className="w-2.5 h-2.5 text-muted-foreground" />
                                       <span className="text-xs text-muted-foreground">
-                                        {formatTimeAgo(session.lastActivity, currentTime)}
+                                        <SessionTimeDisplay lastActivity={session.lastActivity} />
                                       </span>
                                       {session.messageCount > 0 && (
                                         <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
@@ -1189,8 +1210,6 @@ function Sidebar({
                               </div>
                             </div>
                           </div>
-                            )}
-                          </SessionTimeTracker>
                         ))
                       )}
 
