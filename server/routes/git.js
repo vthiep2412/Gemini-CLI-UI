@@ -334,14 +334,15 @@ router.post('/commit', async (req, res) => {
     await validateGitRepository(projectPath);
 
     // Stage explicitly requested files, if any are provided
+    // ⚡ Bolt: Batch files to avoid N+1 subprocess bottleneck
     if (files && files.length > 0) {
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
       }
+      await execFileAsync('git', ['add', '--', ...files], { cwd: projectPath });
     }
 
     // Check if there are any staged changes to commit
@@ -994,14 +995,15 @@ router.post('/stage', async (req, res) => {
 
     if (files === 'all' || !files) {
       await execFileAsync('git', ['add', '-A'], { cwd: projectPath });
-    } else {
+    } else if (files && files.length > 0) {
+      // ⚡ Bolt: Batch files to avoid N+1 subprocess bottleneck
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
       }
+      await execFileAsync('git', ['add', '--', ...files], { cwd: projectPath });
     }
     res.json({ success: true });
   } catch (error) {
@@ -1023,14 +1025,15 @@ router.post('/unstage', async (req, res) => {
 
     if (files === 'all' || !files) {
       await execFileAsync('git', ['restore', '--staged', '.'], { cwd: projectPath });
-    } else {
+    } else if (files && files.length > 0) {
+      // ⚡ Bolt: Batch files to avoid N+1 subprocess bottleneck
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['restore', '--staged', '--', file], { cwd: projectPath });
       }
+      await execFileAsync('git', ['restore', '--staged', '--', ...files], { cwd: projectPath });
     }
     res.json({ success: true });
   } catch (error) {
