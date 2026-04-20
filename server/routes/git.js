@@ -335,12 +335,20 @@ router.post('/commit', async (req, res) => {
 
     // Stage explicitly requested files, if any are provided
     if (files && files.length > 0) {
+      const validFiles = [];
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+        validFiles.push(file);
+      }
+
+      // Batch git add operations to avoid N+1 subprocess bottleneck
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
+        const batch = validFiles.slice(i, i + BATCH_SIZE);
+        await execFileAsync('git', ['add', '--', ...batch], { cwd: projectPath });
       }
     }
 
@@ -995,12 +1003,20 @@ router.post('/stage', async (req, res) => {
     if (files === 'all' || !files) {
       await execFileAsync('git', ['add', '-A'], { cwd: projectPath });
     } else {
+      const validFiles = [];
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+        validFiles.push(file);
+      }
+
+      // Batch git add operations to avoid N+1 subprocess bottleneck
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
+        const batch = validFiles.slice(i, i + BATCH_SIZE);
+        await execFileAsync('git', ['add', '--', ...batch], { cwd: projectPath });
       }
     }
     res.json({ success: true });
@@ -1024,12 +1040,20 @@ router.post('/unstage', async (req, res) => {
     if (files === 'all' || !files) {
       await execFileAsync('git', ['restore', '--staged', '.'], { cwd: projectPath });
     } else {
+      const validFiles = [];
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['restore', '--staged', '--', file], { cwd: projectPath });
+        validFiles.push(file);
+      }
+
+      // Batch git restore operations to avoid N+1 subprocess bottleneck
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
+        const batch = validFiles.slice(i, i + BATCH_SIZE);
+        await execFileAsync('git', ['restore', '--staged', '--', ...batch], { cwd: projectPath });
       }
     }
     res.json({ success: true });
