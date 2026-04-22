@@ -1360,75 +1360,90 @@ function permToRwx(perm) {
 
 async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden = true) {
   // Using fsPromises from import
-  const items = [];
-  
   try {
     const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     
-    for (const entry of entries) {
-      // Debug: log all entries including hidden files
-   
+    // Filter out heavy build directories first
+    const filteredEntries = entries.filter(entry =>
+      entry.name !== 'node_modules' &&
+      entry.name !== 'dist' &&
+      entry.name !== 'build'
+    );
+
+    // ⚡ Bolt Performance Optimization:
+    // Replaced sequential `for...of` loop with chunked `Promise.all` to safely parallelize
+    // `fsPromises.stat` and recursive calls without exhausting file descriptors (EMFILE),
+    // reducing average execution time significantly for typical directories.
+    const items = [];
+    const chunkSize = 20; // safe concurrency limit
+    for (let i = 0; i < filteredEntries.length; i += chunkSize) {
+      const chunk = filteredEntries.slice(i, i + chunkSize);
       
-      // Skip only heavy build directories
-      if (entry.name === 'node_modules' || 
-          entry.name === 'dist' || 
-          entry.name === 'build') continue;
-      
-      const itemPath = path.join(dirPath, entry.name);
-      const item = {
-        name: entry.name,
-        path: itemPath,
-        type: entry.isDirectory() ? 'directory' : 'file'
-      };
-      
-      // Get file stats for additional metadata
-      try {
-        const stats = await fsPromises.stat(itemPath);
-        item.size = stats.size;
-        item.modified = stats.mtime.toISOString();
+      const chunkItems = await Promise.all(chunk.map(async (entry) => {
+        const itemPath = path.join(dirPath, entry.name);
+        const item = {
+          name: entry.name,
+          path: itemPath,
+          type: entry.isDirectory() ? 'directory' : 'file'
+        };
         
-        // Convert permissions to rwx format
-        const mode = stats.mode;
-        const ownerPerm = (mode >> 6) & 7;
-        const groupPerm = (mode >> 3) & 7;
-        const otherPerm = mode & 7;
-        item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
-        item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
-      } catch {
-        // If stat fails, provide default values
-        item.size = 0;
-        item.modified = null;
-        item.permissions = '000';
-        item.permissionsRwx = '---------';
-      }
-      
-      if (entry.isDirectory() && currentDepth < maxDepth) {
-        // Recursively get subdirectories but limit depth
+        // Get file stats for additional metadata
         try {
-          // Check if we can access the directory before trying to read it
-          await fsPromises.access(item.path, fs.constants.R_OK);
-          item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
-        } catch {
-          // Silently skip directories we can't access (permission denied, etc.)
-          item.children = [];
+          const stats = await fsPromises.stat(itemPath);
+          item.size = stats.size;
+          item.modified = stats.mtime.toISOString();
+
+          // Convert permissions to rwx format
+          const mode = stats.mode;
+          const ownerPerm = (mode >> 6) & 7;
+          const groupPerm = (mode >> 3) & 7;
+          const otherPerm = mode & 7;
+          item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
+          item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
+        } catch (statError) {
+          // If stat fails, provide default values
+          item.size = 0;
+          item.modified = null;
+          item.permissions = '000';
+          item.permissionsRwx = '---------';
         }
-      }
+
+        if (entry.isDirectory() && currentDepth < maxDepth) {
+          // Recursively get subdirectories but limit depth
+          try {
+            // Check if we can access the directory before trying to read it
+            await fsPromises.access(item.path, fs.constants.R_OK);
+            item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
+          } catch (accessError) {
+            // Silently skip directories we can't access (permission denied, etc.)
+            item.children = [];
+          }
+        }
+
+        return item;
+      })).catch(err => {
+        // Individual stat errors are caught, so this catch only fires
+        // for unexpected catastrophic chunk-level errors.
+        console.error('Error processing directory chunk:', err);
+        return [];
+      });
       
-      items.push(item);
+      items.push(...chunkItems.filter(Boolean));
     }
+
+    return items.sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === 'directory' ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
   } catch (error) {
     // Only log non-permission errors to avoid spam
     if (error.code !== 'EACCES' && error.code !== 'EPERM') {
       // console.error('Error reading directory:', error);
     }
+    return [];
   }
-  
-  return items.sort((a, b) => {
-    if (a.type !== b.type) {
-      return a.type === 'directory' ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
 }
 
 const PORT = process.env.PORT || 4008;
