@@ -1365,56 +1365,67 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
   try {
     const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     
-    for (const entry of entries) {
-      // Debug: log all entries including hidden files
-   
+    // Process in chunks to avoid EMFILE errors while parallelizing
+    const CHUNK_SIZE = 20;
+
+    for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+      const chunk = entries.slice(i, i + CHUNK_SIZE);
       
-      // Skip only heavy build directories
-      if (entry.name === 'node_modules' || 
-          entry.name === 'dist' || 
-          entry.name === 'build') continue;
-      
-      const itemPath = path.join(dirPath, entry.name);
-      const item = {
-        name: entry.name,
-        path: itemPath,
-        type: entry.isDirectory() ? 'directory' : 'file'
-      };
-      
-      // Get file stats for additional metadata
-      try {
-        const stats = await fsPromises.stat(itemPath);
-        item.size = stats.size;
-        item.modified = stats.mtime.toISOString();
+      const chunkResults = await Promise.all(chunk.map(async (entry) => {
+        // Skip only heavy build directories
+        if (entry.name === 'node_modules' ||
+            entry.name === 'dist' ||
+            entry.name === 'build') return null;
         
-        // Convert permissions to rwx format
-        const mode = stats.mode;
-        const ownerPerm = (mode >> 6) & 7;
-        const groupPerm = (mode >> 3) & 7;
-        const otherPerm = mode & 7;
-        item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
-        item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
-      } catch {
-        // If stat fails, provide default values
-        item.size = 0;
-        item.modified = null;
-        item.permissions = '000';
-        item.permissionsRwx = '---------';
-      }
-      
-      if (entry.isDirectory() && currentDepth < maxDepth) {
-        // Recursively get subdirectories but limit depth
+        const itemPath = path.join(dirPath, entry.name);
+        const item = {
+          name: entry.name,
+          path: itemPath,
+          type: entry.isDirectory() ? 'directory' : 'file'
+        };
+
+        // Get file stats for additional metadata
         try {
-          // Check if we can access the directory before trying to read it
-          await fsPromises.access(item.path, fs.constants.R_OK);
-          item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
+          const stats = await fsPromises.stat(itemPath);
+          item.size = stats.size;
+          item.modified = stats.mtime.toISOString();
+
+          // Convert permissions to rwx format
+          const mode = stats.mode;
+          const ownerPerm = (mode >> 6) & 7;
+          const groupPerm = (mode >> 3) & 7;
+          const otherPerm = mode & 7;
+          item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
+          item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
         } catch {
-          // Silently skip directories we can't access (permission denied, etc.)
-          item.children = [];
+          // If stat fails, provide default values
+          item.size = 0;
+          item.modified = null;
+          item.permissions = '000';
+          item.permissionsRwx = '---------';
         }
-      }
+
+        return { item, entry };
+      }));
       
-      items.push(item);
+      for (const result of chunkResults) {
+        if (result === null) continue;
+
+        const { item, entry } = result;
+        if (entry.isDirectory() && currentDepth < maxDepth) {
+          // Recursively get subdirectories but limit depth
+          try {
+            // Check if we can access the directory before trying to read it
+            await fsPromises.access(item.path, fs.constants.R_OK);
+            item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
+          } catch {
+            // Silently skip directories we can't access (permission denied, etc.)
+            item.children = [];
+          }
+        }
+
+        items.push(item);
+      }
     }
   } catch (error) {
     // Only log non-permission errors to avoid spam
