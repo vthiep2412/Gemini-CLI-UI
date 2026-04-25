@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -73,7 +73,7 @@ function Sidebar({
   const [expandedProjectName, setExpandedProjectName] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
-  const [editingName, setEditingName] = useState('');
+  const editingNameRef = useRef('');
   const [newProjectPath, setNewProjectPath] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState({});
@@ -82,7 +82,7 @@ function Sidebar({
   const [projectSortOrder, setProjectSortOrder] = useState('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
-  const [editingSessionName, setEditingSessionName] = useState('');
+  const editingSessionNameRef = useRef('');
   // const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -262,17 +262,17 @@ function Sidebar({
 
   const startEditing = (project) => {
     setEditingProject(project.name);
-    setEditingName(project.displayName);
+    editingNameRef.current = project.displayName;
   };
 
   const cancelEditing = () => {
     setEditingProject(null);
-    setEditingName('');
+    editingNameRef.current = '';
   };
 
   const saveProjectName = async (projectName) => {
     try {
-      const response = await api.renameProject(projectName, editingName);
+      const response = await api.renameProject(projectName, editingNameRef.current);
 
       if (response.ok) {
         // Refresh projects to get updated data
@@ -289,7 +289,7 @@ function Sidebar({
     }
     
     setEditingProject(null);
-    setEditingName('');
+    editingNameRef.current = '';
   };
 
   const deleteSession = async (projectName, sessionId) => {
@@ -723,8 +723,8 @@ function Sidebar({
                               {editingProject === project.name ? (
                                 <input
                                   type="text"
-                                  value={editingName}
-                                  onChange={(e) => setEditingName(e.target.value)}
+                                  defaultValue={editingNameRef.current}
+                                  onChange={(e) => editingNameRef.current = e.target.value}
                                   className="w-full px-3 py-2 text-sm border-2 border-primary/40 focus:border-primary rounded-lg bg-background text-foreground shadow-sm focus:shadow-md transition-all duration-200 focus:outline-none"
                                   placeholder="Project name"
                                   autoFocus
@@ -873,8 +873,8 @@ function Sidebar({
                             <div className="space-y-1">
                               <input
                                 type="text"
-                                value={editingName}
-                                onChange={(e) => setEditingName(e.target.value)}
+                                defaultValue={editingNameRef.current}
+                                onChange={(e) => editingNameRef.current = e.target.value}
                                 className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground focus:ring-2 focus:ring-primary/20"
                                 placeholder="Project name"
                                 autoFocus
@@ -1122,15 +1122,15 @@ function Sidebar({
                                   <>
                                     <input
                                       type="text"
-                                      value={editingSessionName}
-                                      onChange={(e) => setEditingSessionName(e.target.value)}
+                                      defaultValue={editingSessionNameRef.current}
+                                      onChange={(e) => editingSessionNameRef.current = e.target.value}
                                       onKeyDown={(e) => {
                                         e.stopPropagation();
                                         if (e.key === 'Enter') {
-                                          onSessionUpdate(project.name, session.id, editingSessionName);
+                                          onSessionUpdate(project.name, session.id, editingSessionNameRef.current);
                                         } else if (e.key === 'Escape') {
                                           setEditingSession(null);
-                                          setEditingSessionName('');
+                                          editingSessionNameRef.current = '';
                                         }
                                       }}
                                       onClick={(e) => e.stopPropagation()}
@@ -1141,7 +1141,7 @@ function Sidebar({
                                       className="w-6 h-6 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded flex items-center justify-center"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onSessionUpdate(project.name, session.id, editingSessionName);
+                                        onSessionUpdate(project.name, session.id, editingSessionNameRef.current);
                                       }}
                                       title="Save"
                                     >
@@ -1152,7 +1152,7 @@ function Sidebar({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingSession(null);
-                                        setEditingSessionName('');
+                                        editingSessionNameRef.current = '';
                                       }}
                                       title="Cancel"
                                     >
@@ -1167,7 +1167,7 @@ function Sidebar({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingSession(session.id);
-                                        setEditingSessionName(session.summary || 'New Session');
+                                        editingSessionNameRef.current = session.summary || 'New Session';
                                       }}
                                       title="Manually edit session name"
                                     >
