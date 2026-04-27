@@ -208,8 +208,16 @@ async function getProjects() {
     // First, get existing projects from the file system
     const entries = await fs.readdir(geminiDir, { withFileTypes: true });
     
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
+    // Optimization: Batch process projects in chunks to avoid sequential bottleneck while preventing EMFILE errors
+    const sessionManager = (await import('./sessionManager.js')).default;
+
+    // Process in chunks of 20
+    const chunkSize = 20;
+    for (let i = 0; i < entries.length; i += chunkSize) {
+      const chunk = entries.slice(i, i + chunkSize);
+
+      const chunkResults = await Promise.all(chunk.map(async (entry) => {
+        if (!entry.isDirectory()) return null;
         existingProjects.add(entry.name);
         
         // Extract actual project directory from JSONL sessions
@@ -232,7 +240,7 @@ async function getProjects() {
         // Try to get sessions for this project (just first 5 for performance)
         try {
           // Use sessionManager to get sessions for this project
-          const sessionManager = (await import('./sessionManager.js')).default;
+          // SessionManager is now imported once outside the loop
           const allSessions = sessionManager.getProjectSessions(actualProjectDir);
           
           // Paginate the sessions
@@ -246,7 +254,11 @@ async function getProjects() {
           console.warn(`Could not load sessions for project ${entry.name}:`, e.message);
         }
         
-        projects.push(project);
+        return project;
+      }));
+
+      for (const project of chunkResults) {
+        if (project) projects.push(project);
       }
     }
   } catch (error) {
