@@ -16,7 +16,26 @@ const isImageFile = (filename) => {
 };
 
 // ─── Shared Item Row ─────────────────────────────────────────────────────────
-function FileRow({ 
+
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+};
+
+const formatRelativeTime = (date) => {
+  if (!date) return '—';
+  const diffInSeconds = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (diffInSeconds < 60) return 'just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  return new Date(date).toLocaleDateString();
+};
+
+// ─── Shared Item Row ─────────────────────────────────────────────────────────
+const FileRow = React.memo(function FileRow({
   item, 
   level, 
   isExpanded, 
@@ -53,7 +72,9 @@ function FileRow({
         isRenaming && 'bg-(--bg-muted)/80 ring-1 ring-(--git-accent)/50'
       )}
       style={{ paddingLeft: `${indent}px` }}
-      onClick={() => !isRenaming && onClickItem(item)}
+      onClick={() => {
+        if (!isRenaming) onClickItem(item);
+      }}
     >
       <FileIcon filename={item.name} isFolder={isDir} isOpen={isExpanded} size={19} className="shrink-0" />
 
@@ -103,7 +124,7 @@ function FileRow({
       </div>
     </div>
   );
-}
+});
 
 // ─── Custom Context Menu ──────────────────────────────────────────────────
 function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
@@ -169,7 +190,7 @@ function ContextMenu({ x, y, item, onClose, onRename, onDelete }) {
   );
 }
 
-function TreeNodes({ items, level = 0, expandedDirs, activeFilePath, viewMode, onClickItem, onContextMenu, renamingPath, onRenameSubmit, onRenameCancel, formatFileSize, formatRelativeTime }) {
+const TreeNodes = React.memo(function TreeNodes({ items, level = 0, expandedDirs, activeFilePath, viewMode, onClickItem, onContextMenu, renamingPath, onRenameSubmit, onRenameCancel, formatFileSize, formatRelativeTime }) {
   return items.map((item) => (
     <div key={item.path}>
       <FileRow
@@ -216,7 +237,7 @@ function TreeNodes({ items, level = 0, expandedDirs, activeFilePath, viewMode, o
       </AnimatePresence>
     </div>
   ));
-}
+});
 
 function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
   const [files, setFiles] = useState([]);
@@ -233,6 +254,8 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
 
   const selectedProjectRef = useRef(selectedProject);
   useEffect(() => { selectedProjectRef.current = selectedProject; }, [selectedProject]);
+  const onFileSelectRef = useRef(onFileSelect);
+  useEffect(() => { onFileSelectRef.current = onFileSelect; }, [onFileSelect]);
 
   const fetchFiles = useCallback(async (isSilent = false) => {
     const project = selectedProjectRef.current;
@@ -279,16 +302,16 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
     });
   }, []);
 
-  const handleContextMenu = (e, item) => {
+  const handleContextMenu = useCallback((e, item) => {
     e.preventDefault();
     setCtxMenu({ x: e.clientX, y: e.clientY, item });
-  };
+  }, []);
 
-  const startRename = (item) => {
+  const startRename = useCallback((item) => {
     setRenamingPath(item.path);
-  };
+  }, []);
 
-  const handleRenameSubmit = async (item, newName) => {
+  const handleRenameSubmit = useCallback(async (item, newName) => {
     if (!newName || newName === item.name) {
       setRenamingPath(null);
       return;
@@ -309,9 +332,13 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
     } finally {
       setRenamingPath(null);
     }
-  };
+  }, [fetchFiles]);
 
-  const handleDelete = async (item) => {
+  const handleRenameCancel = useCallback(() => {
+    setRenamingPath(null);
+  }, []);
+
+  const handleDelete = useCallback(async (item) => {
     if (!window.confirm(`Delete ${item.name}? This cannot be undone.`)) return;
 
     try {
@@ -323,7 +350,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
       console.error('Delete failed:', err);
       toast.error('Error deleting file');
     }
-  };
+  }, [fetchFiles]);
 
   const handleClickItem = useCallback((item) => {
     if (item.type === 'directory') toggleDirectory(item.path);
@@ -335,35 +362,18 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
         projectName: selectedProjectRef.current?.name,
       });
     } else {
-      onFileSelect?.({
+      onFileSelectRef.current?.({
         name: item.name,
         path: item.path,
         projectPath: selectedProjectRef.current?.path,
         projectName: selectedProjectRef.current?.name,
       });
     }
-  }, [toggleDirectory, onFileSelect]);
+  }, [toggleDirectory]);
 
   const changeViewMode = (mode) => {
     setViewMode(mode);
     try { localStorage.setItem('file-tree-view-mode', mode); } catch { /* noop */ }
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes || bytes <= 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
-  const formatRelativeTime = (date) => {
-    if (!date) return '—';
-    const diffInSeconds = Math.floor((Date.now() - new Date(date)) / 1000);
-    if (diffInSeconds < 60) return 'just now';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-    return new Date(date).toLocaleDateString();
   };
 
   if (loading) {
@@ -428,7 +438,7 @@ function FileTree({ selectedProject, onFileSelect, activeFilePath }) {
               onContextMenu={handleContextMenu}
               renamingPath={renamingPath}
               onRenameSubmit={handleRenameSubmit}
-              onRenameCancel={() => setRenamingPath(null)}
+              onRenameCancel={handleRenameCancel}
               formatFileSize={formatFileSize}
               formatRelativeTime={formatRelativeTime}
             />
