@@ -204,6 +204,9 @@ async function getProjects() {
   const projects = [];
   const existingProjects = new Set();
   
+  // ⚡ Bolt: Hoist dynamic import outside the loop to prevent yielding to the event loop on every iteration
+  const sessionManager = (await import('./sessionManager.js')).default;
+
   try {
     // First, get existing projects from the file system
     const entries = await fs.readdir(geminiDir, { withFileTypes: true });
@@ -232,7 +235,6 @@ async function getProjects() {
         // Try to get sessions for this project (just first 5 for performance)
         try {
           // Use sessionManager to get sessions for this project
-          const sessionManager = (await import('./sessionManager.js')).default;
           const allSessions = sessionManager.getProjectSessions(actualProjectDir);
           
           // Paginate the sessions
