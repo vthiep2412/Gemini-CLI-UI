@@ -208,6 +208,10 @@ async function getProjects() {
     // First, get existing projects from the file system
     const entries = await fs.readdir(geminiDir, { withFileTypes: true });
     
+    // Performance optimization: Hoist dynamic import outside the loop
+    // to avoid yielding to the event loop on every iteration.
+    const sessionManager = (await import('./sessionManager.js')).default;
+
     for (const entry of entries) {
       if (entry.isDirectory()) {
         existingProjects.add(entry.name);
@@ -231,8 +235,6 @@ async function getProjects() {
         
         // Try to get sessions for this project (just first 5 for performance)
         try {
-          // Use sessionManager to get sessions for this project
-          const sessionManager = (await import('./sessionManager.js')).default;
           const allSessions = sessionManager.getProjectSessions(actualProjectDir);
           
           // Paginate the sessions
