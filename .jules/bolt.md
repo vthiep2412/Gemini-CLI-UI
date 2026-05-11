@@ -1,0 +1,3 @@
+## 2025-05-11 - Prevent unnecessary re-renders in large React components
+**Learning:** Large React lists (like Sidebar sessions) can suffer from massive performance degradation if list items are rendered inline inside the parent loop. Creating inline components/callbacks causes the entire list to re-render whenever the parent state changes (e.g., when editing one item's name or on a tick from `useCurrentTime`).
+**Action:** Extract list items into their own standalone `React.memo` components. Push volatile state (like active timers or item-specific editing) into the child component or use `useRef` with uncontrolled inputs to isolate re-renders.
