@@ -995,12 +995,21 @@ router.post('/stage', async (req, res) => {
     if (files === 'all' || !files) {
       await execFileAsync('git', ['add', '-A'], { cwd: projectPath });
     } else {
+      // ⚡ Bolt Optimization: Batch Git operations
+      // Pre-validate all paths to ensure atomic failure and prevent partial state changes
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['add', '--', file], { cwd: projectPath });
+      }
+
+      // Batch multiple file paths into a single command in chunks of 100
+      // This avoids the N+1 subprocess bottleneck while respecting OS command-line length limits.
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+        const chunk = files.slice(i, i + CHUNK_SIZE);
+        await execFileAsync('git', ['add', '--', ...chunk], { cwd: projectPath });
       }
     }
     res.json({ success: true });
@@ -1024,12 +1033,21 @@ router.post('/unstage', async (req, res) => {
     if (files === 'all' || !files) {
       await execFileAsync('git', ['restore', '--staged', '.'], { cwd: projectPath });
     } else {
+      // ⚡ Bolt Optimization: Batch Git operations
+      // Pre-validate all paths to ensure atomic failure and prevent partial state changes
       for (const file of files) {
         const resolvedPath = path.resolve(projectPath, file);
         if (!resolvedPath.startsWith(path.resolve(projectPath) + path.sep)) {
           return res.status(400).json({ error: `Invalid file path: ${file}` });
         }
-        await execFileAsync('git', ['restore', '--staged', '--', file], { cwd: projectPath });
+      }
+
+      // Batch multiple file paths into a single command in chunks of 100
+      // This avoids the N+1 subprocess bottleneck while respecting OS command-line length limits.
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+        const chunk = files.slice(i, i + CHUNK_SIZE);
+        await execFileAsync('git', ['restore', '--staged', '--', ...chunk], { cwd: projectPath });
       }
     }
     res.json({ success: true });
