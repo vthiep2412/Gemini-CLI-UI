@@ -161,18 +161,18 @@ function Sidebar({
       }
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also check periodically when component is focused (for same-tab changes)
-    const checkInterval = setInterval(() => {
-      if (document.hasFocus()) {
+    const handleSettingsSync = (e) => {
+      if (e.detail?.key === 'gemini-tools-settings') {
         loadSortOrder();
       }
-    }, 1000);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('settings-sync', handleSettingsSync);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(checkInterval);
+      window.removeEventListener('settings-sync', handleSettingsSync);
     };
   }, []);
 

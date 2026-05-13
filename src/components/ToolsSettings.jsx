@@ -565,6 +565,13 @@ function ToolsSettings({ isOpen, onClose }) {
         storageArea: localStorage,
         url: window.location.href
       }));
+      window.dispatchEvent(new CustomEvent('settings-sync', {
+        detail: {
+          key: 'gemini-tools-settings',
+          newValue: newSettingsStr,
+          oldValue: rawOldSettings
+        }
+      }));
       
       setSaveStatus('success');
       
@@ -601,6 +608,13 @@ function ToolsSettings({ isOpen, onClose }) {
         oldValue: savedSettings,
         storageArea: localStorage,
         url: window.location.href
+      }));
+      window.dispatchEvent(new CustomEvent('settings-sync', {
+        detail: {
+          key: 'gemini-tools-settings',
+          newValue: newSettingsStr,
+          oldValue: savedSettings
+        }
       }));
     } catch {
       // Silently fail for auto-save
