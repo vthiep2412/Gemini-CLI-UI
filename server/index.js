@@ -1365,45 +1365,56 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
   try {
     const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
     
-    for (const entry of entries) {
-      // Debug: log all entries including hidden files
-   
+    // Filter out heavy build directories early
+    const validEntries = entries.filter(entry =>
+      entry.name !== 'node_modules' &&
+      entry.name !== 'dist' &&
+      entry.name !== 'build'
+    );
+
+    // Process stats in chunks of 20 to avoid N+1 and EMFILE
+    const chunkSize = 20;
+    for (let i = 0; i < validEntries.length; i += chunkSize) {
+      const chunk = validEntries.slice(i, i + chunkSize);
       
-      // Skip only heavy build directories
-      if (entry.name === 'node_modules' || 
-          entry.name === 'dist' || 
-          entry.name === 'build') continue;
-      
-      const itemPath = path.join(dirPath, entry.name);
-      const item = {
-        name: entry.name,
-        path: itemPath,
-        type: entry.isDirectory() ? 'directory' : 'file'
-      };
-      
-      // Get file stats for additional metadata
-      try {
-        const stats = await fsPromises.stat(itemPath);
-        item.size = stats.size;
-        item.modified = stats.mtime.toISOString();
+      const chunkItems = await Promise.all(chunk.map(async (entry) => {
+        const itemPath = path.join(dirPath, entry.name);
+        const item = {
+          name: entry.name,
+          path: itemPath,
+          type: entry.isDirectory() ? 'directory' : 'file'
+        };
         
-        // Convert permissions to rwx format
-        const mode = stats.mode;
-        const ownerPerm = (mode >> 6) & 7;
-        const groupPerm = (mode >> 3) & 7;
-        const otherPerm = mode & 7;
-        item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
-        item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
-      } catch {
-        // If stat fails, provide default values
-        item.size = 0;
-        item.modified = null;
-        item.permissions = '000';
-        item.permissionsRwx = '---------';
-      }
+        // Get file stats for additional metadata
+        try {
+          const stats = await fsPromises.stat(itemPath);
+          item.size = stats.size;
+          item.modified = stats.mtime.toISOString();
+
+          // Convert permissions to rwx format
+          const mode = stats.mode;
+          const ownerPerm = (mode >> 6) & 7;
+          const groupPerm = (mode >> 3) & 7;
+          const otherPerm = mode & 7;
+          item.permissions = ownerPerm.toString() + groupPerm.toString() + otherPerm.toString();
+          item.permissionsRwx = permToRwx(ownerPerm) + permToRwx(groupPerm) + permToRwx(otherPerm);
+        } catch {
+          // If stat fails, provide default values
+          item.size = 0;
+          item.modified = null;
+          item.permissions = '000';
+          item.permissionsRwx = '---------';
+        }
+
+        return item;
+      }));
       
-      if (entry.isDirectory() && currentDepth < maxDepth) {
-        // Recursively get subdirectories but limit depth
+      items.push(...chunkItems);
+    }
+
+    // Process subdirectories sequentially to prevent EMFILE
+    for (const item of items) {
+      if (item.type === 'directory' && currentDepth < maxDepth) {
         try {
           // Check if we can access the directory before trying to read it
           await fsPromises.access(item.path, fs.constants.R_OK);
@@ -1413,8 +1424,6 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
           item.children = [];
         }
       }
-      
-      items.push(item);
     }
   } catch (error) {
     // Only log non-permission errors to avoid spam
