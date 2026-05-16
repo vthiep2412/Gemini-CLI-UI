@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -82,7 +82,7 @@ function Sidebar({
   const [projectSortOrder, setProjectSortOrder] = useState('name');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
-  const [editingSessionName, setEditingSessionName] = useState('');
+  const sessionEditInputRef = useRef(null);
   // const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -1122,15 +1122,15 @@ function Sidebar({
                                   <>
                                     <input
                                       type="text"
-                                      value={editingSessionName}
-                                      onChange={(e) => setEditingSessionName(e.target.value)}
+                                      defaultValue={session.summary || 'New Session'}
+                                      ref={sessionEditInputRef}
                                       onKeyDown={(e) => {
                                         e.stopPropagation();
                                         if (e.key === 'Enter') {
-                                          onSessionUpdate(project.name, session.id, editingSessionName);
+                                          onSessionUpdate(project.name, session.id, sessionEditInputRef.current?.value || '');
+                                          setEditingSession(null);
                                         } else if (e.key === 'Escape') {
                                           setEditingSession(null);
-                                          setEditingSessionName('');
                                         }
                                       }}
                                       onClick={(e) => e.stopPropagation()}
@@ -1141,7 +1141,8 @@ function Sidebar({
                                       className="w-6 h-6 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded flex items-center justify-center"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onSessionUpdate(project.name, session.id, editingSessionName);
+                                        onSessionUpdate(project.name, session.id, sessionEditInputRef.current?.value || '');
+                                        setEditingSession(null);
                                       }}
                                       title="Save"
                                     >
@@ -1152,7 +1153,6 @@ function Sidebar({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingSession(null);
-                                        setEditingSessionName('');
                                       }}
                                       title="Cancel"
                                     >
@@ -1167,7 +1167,6 @@ function Sidebar({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setEditingSession(session.id);
-                                        setEditingSessionName(session.summary || 'New Session');
                                       }}
                                       title="Manually edit session name"
                                     >
