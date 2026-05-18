@@ -4,6 +4,11 @@ import path from 'path';
 import readline from 'readline';
 import os from 'os';
 
+// ⚡ Bolt: Hoisted sessionManager import outside of the getProjects() loop.
+// Dynamic imports inside loops yield to the event loop on every iteration.
+// This static import improves performance by avoiding that overhead.
+import sessionManager from './sessionManager.js';
+
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
 
@@ -232,7 +237,6 @@ async function getProjects() {
         // Try to get sessions for this project (just first 5 for performance)
         try {
           // Use sessionManager to get sessions for this project
-          const sessionManager = (await import('./sessionManager.js')).default;
           const allSessions = sessionManager.getProjectSessions(actualProjectDir);
           
           // Paginate the sessions
